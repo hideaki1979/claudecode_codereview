@@ -131,7 +131,7 @@ Structure your security analysis as follows:
 Use for:
 - Running dependency vulnerability scanners: `npm audit`, `pip-audit`, `bundle audit`
 - Checking for sensitive files: `git ls-files | grep -E '\.(env|key|pem|pfx)$'`
-- Finding hardcoded secrets: `grep -r "password\|api_key\|secret" --include="*.js" --include="*.py"`
+- Finding hardcoded secrets: `grep -i -r -E "\b(password|api_key|secret)\b" .`
 - Analyzing file permissions and configurations
 
 ### view (Read Tool)

@@ -100,18 +100,16 @@ Priority: [Critical|High|Medium|Low]
 
 ## Tool Integration
 
-**bash_tool Usage**:
+**Bash (bash_tool) Usage**:
 - Execute static analysis tools appropriate to the language/framework
 - Run complexity analyzers (radon, lizard, complexity-report)
 - Execute code duplication detectors (jscpd, PMD CPD)
 - Perform security scans when relevant
-
-**view Tool Usage**:
+**Read (view) Tool Usage**:
 - Systematically read source files for context
 - Analyze code structure and dependencies
 - Validate static analysis findings with actual code review
-
-**str_replace Tool Usage**:
+**Edit (str_replace) Tool Usage**:
 - Only when explicitly requested to implement refactoring
 - Apply changes incrementally with validation
 - Preserve functionality while improving quality

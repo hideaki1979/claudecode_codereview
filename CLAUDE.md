@@ -4,11 +4,11 @@
 
 A Next.js-based GitHub Pull Request analysis dashboard that automatically evaluates code quality and security vulnerabilities.
 
-**Stack**: Next.js 14 (App Router), TypeScript, React, Tailwind CSS, Octokit
+**Stack**: Next.js 16 (App Router), TypeScript, React, Tailwind CSS, Octokit
 
 ## Project Structure
 
-```
+```tree
 code-review-dashboard/
 ├── src/
 │   ├── app/                    # Next.js App Router
@@ -89,7 +89,7 @@ Read these files when working on related features.
 
 We use SQLite for development. Connection details in `.env.local`:
 
-```
+```bash
 DATABASE_URL="file:./dev.db"
 GITHUB_TOKEN="your_token_here"
 ```

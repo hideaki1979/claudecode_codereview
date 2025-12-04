@@ -26,7 +26,7 @@ async function ReviewList() {
 }
 
 // Client Component (explicit)
-("use client");
+"use client";
 
 import { useState } from "react";
 
@@ -41,11 +41,12 @@ function ReviewFilter() {
 ```typescript
 // Server Component - Fetch during render
 async function Page() {
-  const data = await fetch("https://api.example.com/data", {
+  const res = await fetch("https://api.example.com/data", {
     next: { revalidate: 3600 }, // ISR
   });
 
-  return <div>{data}</div>;
+  const data = await res.json();
+  return <div>{/* data を整形して描画 */}</div>;
 }
 
 // Use parallel fetching

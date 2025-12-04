@@ -2,9 +2,9 @@
 name: typescript-best-practices
 description: TypeScript and Next.js best practices checker for modern web development
 allowed-tools:
-  - bash_tool
-  - view
-  - str_replace
+  - Bash
+  - Read
+  - Edit
 ---
 
 # TypeScript & Next.js Best Practices Skill
