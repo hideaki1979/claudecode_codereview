@@ -134,7 +134,7 @@ export function validatePagination(per_page?: number, page?: number): void {
  * @throws Error if validation fails
  */
 
-// ページネーションのパラメータが正しい範囲内かチェックします。
+// GitHubトークンが正しい形式かチェックします。
 export function validateToken(token: string | undefined): void {
   if (!token || typeof token !== 'string' || token.trim() === '') {
     throw new Error(

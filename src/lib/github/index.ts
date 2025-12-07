@@ -66,6 +66,7 @@ export type {
   GitHubMilestone,
   GitHubRepository,
   GitHubPullRequest,
+  GitHubPullRequestSimple,
   GitHubPullRequestFile,
   GitHubDiff,
   ListPullRequestsParams,

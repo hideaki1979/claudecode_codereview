@@ -41,14 +41,14 @@ export async function getPullRequestDiff(
     validateRepository(owner, repo);
     validatePullNumber(pull_number);
 
-    const response = await octokit.rest.pulls.listFiles({
+    // Use paginate to fetch all files across multiple pages
+    // This ensures we get all changed files, even if there are more than 100
+    const files = (await octokit.paginate(octokit.rest.pulls.listFiles, {
       owner,
       repo,
       pull_number,
       per_page: 100, // Maximum allowed
-    });
-
-    const files = response.data as GitHubPullRequestFile[];
+    })) as GitHubPullRequestFile[];
 
     // Calculate totals
     const total_additions = files.reduce((sum, file) => sum + file.additions, 0);

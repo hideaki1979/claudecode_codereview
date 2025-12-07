@@ -7,6 +7,7 @@ import {
 } from './utils';
 import type {
   GitHubPullRequest,
+  GitHubPullRequestSimple,
   ListPullRequestsParams,
   GetPullRequestParams,
   PaginationInfo,
@@ -35,7 +36,7 @@ import type {
 export async function listPullRequests(
   params: ListPullRequestsParams,
   token?: string
-): Promise<{ data: GitHubPullRequest[]; pagination: PaginationInfo }> {
+): Promise<{ data: GitHubPullRequestSimple[]; pagination: PaginationInfo }> {
   try {
     const octokit = getOctokit(token);
 
@@ -80,7 +81,7 @@ export async function listPullRequests(
     };
 
     return {
-      data: response.data as unknown as GitHubPullRequest[],
+      data: response.data as GitHubPullRequestSimple[],
       pagination,
     };
   } catch (error) {

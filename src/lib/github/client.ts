@@ -23,12 +23,24 @@ export function getOctokit(token?: string): Octokit {
     );
   }
 
-  // ステップ3: 既存インスタンスがあれば再利用（シングルトンパターン）
+  // ステップ3: トークンが明示的に渡された場合は、常に新しいインスタンスを作成
+  // これにより、異なるトークンで呼び出された場合に正しい認証情報が使用される
+  if (token) {
+    return new Octokit({
+      auth: authToken,
+      userAgent: 'code-review-dashboard/1.0.0',
+      timeZone: 'Asia/Tokyo',
+      baseUrl: 'https://api.github.com',
+    });
+  }
+
+  // ステップ4: 環境変数のみを使用する場合は、シングルトンパターンを適用
+  // パフォーマンス向上のため、既存インスタンスがあれば再利用
   if (octokitInstance) {
     return octokitInstance;
   }
 
-  // ステップ4: 新規インスタンスの作成
+  // ステップ5: 新規インスタンスの作成（環境変数を使用）
   octokitInstance = new Octokit({
     auth: authToken,  // 認証トークン
     userAgent: 'code-review-dashboard/1.0.0', // APIリクエストのUser-Agent識別子

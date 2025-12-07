@@ -37,6 +37,40 @@ export interface GitHubRepository {
   default_branch: string;
 }
 
+/**
+ * Simplified Pull Request (returned by pulls.list API)
+ * This type represents the simplified version of a pull request
+ * that does not include detailed statistics like commits, additions, deletions, etc.
+ */
+export interface GitHubPullRequestSimple {
+  id: number;
+  number: number;
+  state: 'open' | 'closed'
+  title: string;
+  body: string | null;
+  user: GitHubUser;
+  labels: GitHubLabel[];
+  milestone: GitHubMilestone | null;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  merged_at: string | null;
+  head: {
+    ref: string;
+    sha: string;
+    repo: GitHubRepository | null;
+  };
+  base: {
+    ref: string;
+    sha: string;
+    repo: GitHubRepository;
+  };
+  draft: boolean;
+  html_url: string;
+  diff_url: string;
+  patch_url: string;
+}
+
 export interface GitHubPullRequest {
   id: number;
   number: number;
