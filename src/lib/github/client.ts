@@ -6,11 +6,11 @@ import { Octokit } from '@octokit/rest';
 let octokitInstance: Octokit | null = null;
 
 /**
- * Get or create Octokit instance
+ * Octokitインスタンスの取得または作成
  *
- * @param token - GitHub personal access token (optional, uses env var if not provided)
- * @returns Configured Octokit instance
- * @throws Error if no token is provided and GITHUB_TOKEN env var is not set
+ * @param token - GitHubパーソナルアクセストークン（オプション、未指定の場合は環境変数を使用）
+ * @returns 設定済みのOctokitインスタンス
+ * @throws トークンが提供されず、GITHUB_TOKEN環境変数も設定されていない場合にエラーをスロー
  */
 export function getOctokit(token?: string): Octokit {
   // ステップ1: トークンの取得（引数 > 環境変数の優先順位）
@@ -52,16 +52,16 @@ export function getOctokit(token?: string): Octokit {
 }
 
 /**
- * Reset the Octokit instance (useful for testing or token rotation)
+ * Octokitインスタンスのリセット（テストやトークンローテーションに有用）
  */
 export function resetOctokit(): void {
   octokitInstance = null;
 }
 
 /**
- * Check if GitHub token is configured
+ * GitHubトークンが設定されているかチェック
  *
- * @returns true if token is available
+ * @returns トークンが利用可能な場合true
  */
 export function hasGitHubToken(): boolean {
   return !!process.env.GITHUB_TOKEN;

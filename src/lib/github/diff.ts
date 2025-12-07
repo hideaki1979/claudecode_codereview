@@ -7,12 +7,12 @@ import type {
 } from '@/types/github';
 
 /**
- * Get pull request diff (list of changed files)
+ * プルリクエストの差分を取得（変更されたファイルの一覧）
  *
- * @param params - Request parameters
- * @param token - Optional GitHub token (uses env var if not provided)
- * @returns Diff information including all changed files
- * @throws Error if API request fails
+ * @param params - リクエストパラメータ
+ * @param token - オプションのGitHubトークン（未指定の場合は環境変数を使用）
+ * @returns すべての変更ファイルを含む差分情報
+ * @throws APIリクエストが失敗した場合にエラーをスロー
  *
  * @example
  * ```ts
@@ -37,20 +37,20 @@ export async function getPullRequestDiff(
 
     const { owner, repo, pull_number } = params;
 
-    // Validate parameters
+    // パラメータの検証
     validateRepository(owner, repo);
     validatePullNumber(pull_number);
 
-    // Use paginate to fetch all files across multiple pages
-    // This ensures we get all changed files, even if there are more than 100
+    // ページネーションを使用して複数ページにわたるすべてのファイルを取得
+    // これにより、100件を超える場合でもすべての変更ファイルを取得できる
     const files = (await octokit.paginate(octokit.rest.pulls.listFiles, {
       owner,
       repo,
       pull_number,
-      per_page: 100, // Maximum allowed
+      per_page: 100, // 最大許容値
     })) as GitHubPullRequestFile[];
 
-    // Calculate totals
+    // 合計値の計算
     const total_additions = files.reduce((sum, file) => sum + file.additions, 0);
     const total_deletions = files.reduce((sum, file) => sum + file.deletions, 0);
     const total_changes = files.reduce((sum, file) => sum + file.changes, 0);
@@ -67,12 +67,12 @@ export async function getPullRequestDiff(
 }
 
 /**
- * Get raw patch content for a pull request
+ * プルリクエストの生のパッチコンテンツを取得
  *
- * @param params - Request parameters
- * @param token - Optional GitHub token (uses env var if not provided)
- * @returns Raw patch string
- * @throws Error if API request fails
+ * @param params - リクエストパラメータ
+ * @param token - オプションのGitHubトークン（未指定の場合は環境変数を使用）
+ * @returns 生のパッチ文字列
+ * @throws APIリクエストが失敗した場合にエラーをスロー
  *
  * @example
  * ```ts
@@ -84,6 +84,14 @@ export async function getPullRequestDiff(
  * ```
  */
 
+/**
+ * レスポンスデータが文字列（パッチ形式）かどうかをチェックする型ガード関数
+ * Octokitの型定義がmediaTypeフォーマットの変更を反映していないため、この関数が必要です
+ */
+function isPatchString(data: unknown): data is string {
+  return typeof data === 'string';
+}
+
 // 生のパッチ形式取得
 export async function getPullRequestPatch(
   params: GetPullRequestDiffParams,
@@ -94,11 +102,11 @@ export async function getPullRequestPatch(
 
     const { owner, repo, pull_number } = params;
 
-    // Validate parameters
+    // パラメータの検証
     validateRepository(owner, repo);
     validatePullNumber(pull_number);
 
-    // Request patch format
+    // パッチ形式でリクエスト
     const response = await octokit.rest.pulls.get({
       owner,
       repo,
@@ -108,21 +116,28 @@ export async function getPullRequestPatch(
       },
     });
 
-    // Response data will be the raw patch string
-    return response.data as unknown as string;
+    // mediaType.formatが'patch'の場合、実行時にはresponse.dataは生のパッチ文字列になります。
+    // しかし、OctokitのTypeScript型定義がこれを反映していないため、型アサーションが必要です。
+    // 型ガードを使用して、実行時にデータが文字列であることを確認
+    // これにより、型安全性を保ちながら、意図を明確にできます
+    if (!isPatchString(response.data)) {
+      throw new Error('Expected patch string but received unexpected data type');
+    }
+
+    return response.data;
   } catch (error) {
     throw handleGitHubError(error, 'Failed to fetch pull request patch');
   }
 }
 
 /**
- * Get specific file content from a pull request
+ * プルリクエストから特定のファイルコンテンツを取得
  *
- * @param params - Request parameters
- * @param filename - Specific file to retrieve
- * @param token - Optional GitHub token (uses env var if not provided)
- * @returns File information with patch
- * @throws Error if API request fails or file not found
+ * @param params - リクエストパラメータ
+ * @param filename - 取得する特定のファイル名
+ * @param token - オプションのGitHubトークン（未指定の場合は環境変数を使用）
+ * @returns パッチを含むファイル情報
+ * @throws APIリクエストが失敗した場合、またはファイルが見つからない場合にエラーをスロー
  *
  * @example
  * ```ts
@@ -138,16 +153,17 @@ export async function getPullRequestPatch(
 export async function getPullRequestFile(
   params: GetPullRequestDiffParams,
   filename: string,
-  token?: string
+  token?: string,
+  diff?: GitHubDiff // オプションの引数として差分オブジェクトを追加
 ): Promise<GitHubPullRequestFile> {
   try {
     if (!filename) {
       throw new Error('Filename is required');
     }
 
-    const diff = await getPullRequestDiff(params, token);
+    const diffToUse = diff || (await getPullRequestDiff(params, token));
 
-    const file = diff.files.find((f) => f.filename === filename);
+    const file = diffToUse.files.find((f) => f.filename === filename);
 
     if (!file) {
       throw new Error(`File '${filename}' not found in pull request changes`);
@@ -160,11 +176,11 @@ export async function getPullRequestFile(
 }
 
 /**
- * Filter files by status
+ * ステータスでファイルをフィルタリング
  *
- * @param files - Array of PR files
- * @param status - Status to filter by
- * @returns Filtered array of files
+ * @param files - PRファイルの配列
+ * @param status - フィルタリングするステータス
+ * @returns フィルタリングされたファイルの配列
  *
  * @example
  * ```ts
@@ -183,11 +199,11 @@ export function filterFilesByStatus(
 }
 
 /**
- * Filter files by extension
+ * 拡張子でファイルをフィルタリング
  *
- * @param files - Array of PR files
- * @param extensions - Array of extensions to filter by (e.g., ['.ts', '.tsx'])
- * @returns Filtered array of files
+ * @param files - PRファイルの配列
+ * @param extensions - フィルタリングする拡張子の配列（例: ['.ts', '.tsx']）
+ * @returns フィルタリングされたファイルの配列
  *
  * @example
  * ```ts

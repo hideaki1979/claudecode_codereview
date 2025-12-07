@@ -45,7 +45,7 @@ export interface GitHubRepository {
 export interface GitHubPullRequestSimple {
   id: number;
   number: number;
-  state: 'open' | 'closed'
+  state: 'open' | 'closed';
   title: string;
   body: string | null;
   user: GitHubUser;

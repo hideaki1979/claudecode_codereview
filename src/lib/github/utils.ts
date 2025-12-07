@@ -1,15 +1,15 @@
 import type { GitHubAPIError } from '@/types/github';
 
 /**
- * Handle GitHub API errors with detailed error messages
+ * GitHub APIエラーを詳細なエラーメッセージで処理
  *
- * @param error - Error from GitHub API
- * @param defaultMessage - Default error message
- * @returns Formatted error with context
+ * @param error - GitHub APIからのエラー
+ * @param defaultMessage - デフォルトのエラーメッセージ
+ * @returns コンテキストを含むフォーマット済みエラー
  */
 export function handleGitHubError(error: unknown, defaultMessage: string): Error {
   if (error instanceof Error) {
-    // Check if it's a GitHub API error with status code
+    // ステータスコードを含むGitHub APIエラーかチェック
     const githubError = error as GitHubAPIError & Error;
 
     if (githubError.status === 404) {
@@ -42,7 +42,7 @@ export function handleGitHubError(error: unknown, defaultMessage: string): Error
       return new Error(`${defaultMessage}: GitHub service unavailable. Please try again later.`);
     }
 
-    // Return original error message if available
+    // 利用可能な場合は元のエラーメッセージを返す
     return new Error(`${defaultMessage}: ${error.message}`);
   }
 
@@ -50,11 +50,11 @@ export function handleGitHubError(error: unknown, defaultMessage: string): Error
 }
 
 /**
- * Validate repository owner and name
+ * リポジトリのオーナー名とリポジトリ名を検証
  *
- * @param owner - Repository owner
- * @param repo - Repository name
- * @throws Error if validation fails
+ * @param owner - リポジトリのオーナー
+ * @param repo - リポジトリ名
+ * @throws 検証が失敗した場合にエラーをスロー
  */
 
 // リポジトリのオーナー名とリポジトリ名が正しい形式かチェックします。
@@ -67,7 +67,7 @@ export function validateRepository(owner: string, repo: string): void {
     throw new Error('Repository name is required and must be a non-empty string');
   }
 
-  // Check for invalid characters
+  // 無効な文字をチェック
   const validPattern = /^[a-zA-Z0-9._-]+$/;
   if (!validPattern.test(owner)) {
     throw new Error('Repository owner contains invalid characters');
@@ -79,10 +79,10 @@ export function validateRepository(owner: string, repo: string): void {
 }
 
 /**
- * Validate pull request number
+ * プルリクエスト番号を検証
  *
- * @param pull_number - Pull request number
- * @throws Error if validation fails
+ * @param pull_number - プルリクエスト番号
+ * @throws 検証が失敗した場合にエラーをスロー
  */
 
 // プルリクエスト番号が正しい形式かチェックします。
@@ -97,11 +97,11 @@ export function validatePullNumber(pull_number: number): void {
 }
 
 /**
- * Validate pagination parameters
+ * ページネーションパラメータを検証
  *
- * @param per_page - Items per page
- * @param page - Page number
- * @throws Error if validation fails
+ * @param per_page - 1ページあたりのアイテム数
+ * @param page - ページ番号
+ * @throws 検証が失敗した場合にエラーをスロー
  */
 
 // ページネーションのパラメータが正しい範囲内かチェックします。
@@ -128,10 +128,10 @@ export function validatePagination(per_page?: number, page?: number): void {
 }
 
 /**
- * Validate GitHub token
+ * GitHubトークンを検証
  *
- * @param token - GitHub personal access token
- * @throws Error if validation fails
+ * @param token - GitHubパーソナルアクセストークン
+ * @throws 検証が失敗した場合にエラーをスロー
  */
 
 // GitHubトークンが正しい形式かチェックします。
@@ -142,8 +142,8 @@ export function validateToken(token: string | undefined): void {
     );
   }
 
-  // Basic token format validation
-  // GitHub tokens typically start with 'ghp_', 'gho_', 'ghu_', or 'ghs_'
+  // 基本的なトークン形式の検証
+  // GitHubトークンは通常 'ghp_', 'gho_', 'ghu_', または 'ghs_' で始まる
   const isValidFormat =
     token.startsWith('ghp_') ||
     token.startsWith('gho_') ||
@@ -159,10 +159,10 @@ export function validateToken(token: string | undefined): void {
 }
 
 /**
- * Parse Link header for pagination
+ * ページネーション用のLinkヘッダーを解析
  *
- * @param linkHeader - Link header from GitHub API response
- * @returns Object with next, prev, first, last page URLs
+ * @param linkHeader - GitHub APIレスポンスのLinkヘッダー
+ * @returns 次のページ、前のページ、最初のページ、最後のページのURLを含むオブジェクト
  */
 
 // GitHub APIのレスポンスヘッダーから、次のページ・前のページのURLを抽出します。
@@ -191,10 +191,10 @@ export function parseLinkHeader(linkHeader: string | undefined): {
 }
 
 /**
- * Extract page number from URL
+ * URLからページ番号を抽出
  *
- * @param url - GitHub API URL with page parameter
- * @returns Page number or undefined
+ * @param url - ページパラメータを含むGitHub API URL
+ * @returns ページ番号またはundefined
  */
 
 // URLからページ番号を抽出します。

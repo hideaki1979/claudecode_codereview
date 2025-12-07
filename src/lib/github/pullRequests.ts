@@ -4,6 +4,7 @@ import {
   validateRepository,
   validatePullNumber,
   validatePagination,
+  parseLinkHeader,
 } from './utils';
 import type {
   GitHubPullRequest,
@@ -14,12 +15,12 @@ import type {
 } from '@/types/github';
 
 /**
- * List pull requests for a repository
+ * リポジトリのプルリクエスト一覧を取得
  *
- * @param params - Request parameters
- * @param token - Optional GitHub token (uses env var if not provided)
- * @returns Array of pull requests with pagination info
- * @throws Error if API request fails
+ * @param params - リクエストパラメータ
+ * @param token - オプションのGitHubトークン（未指定の場合は環境変数を使用）
+ * @returns ページネーション情報を含むプルリクエストの配列
+ * @throws APIリクエストが失敗した場合にエラーをスロー
  *
  * @example
  * ```ts
@@ -52,7 +53,7 @@ export async function listPullRequests(
       page = 1, // ページ番号
     } = params;
 
-    // Validate parameters
+    // パラメータの検証
     validateRepository(owner, repo);  // リポジトリ情報の妥当性チェック
     validatePagination(per_page, page); // ページング情報のチェック
 
@@ -68,10 +69,11 @@ export async function listPullRequests(
       page,
     });
 
-    // Extract pagination info from response headers
+    // レスポンスヘッダーからページネーション情報を抽出
     const linkHeader = response.headers.link;
-    const hasNextPage = linkHeader ? linkHeader.includes('rel="next"') : false;
-    const hasPrevPage = page > 1;
+    const links = parseLinkHeader(linkHeader);
+    const hasNextPage = !!links.next;
+    const hasPrevPage = !!links.prev;
 
     const pagination: PaginationInfo = {
       page, // 現在のページ番号
@@ -90,12 +92,12 @@ export async function listPullRequests(
 }
 
 /**
- * Get a single pull request
+ * 単一のプルリクエストを取得
  *
- * @param params - Request parameters
- * @param token - Optional GitHub token (uses env var if not provided)
- * @returns Pull request data
- * @throws Error if API request fails or PR not found
+ * @param params - リクエストパラメータ
+ * @param token - オプションのGitHubトークン（未指定の場合は環境変数を使用）
+ * @returns プルリクエストデータ
+ * @throws APIリクエストが失敗した場合、またはPRが見つからない場合にエラーをスロー
  *
  * @example
  * ```ts
@@ -117,7 +119,7 @@ export async function getPullRequest(
 
     const { owner, repo, pull_number } = params;
 
-    // Validate parameters
+    // パラメータの検証
     validateRepository(owner, repo);
     validatePullNumber(pull_number);  // PR番号の妥当性チェック
 
