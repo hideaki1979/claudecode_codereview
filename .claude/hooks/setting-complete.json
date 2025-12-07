@@ -1,0 +1,52 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR && npm run format 2>/dev/null || echo '⚠️ Format skipped'",
+            "timeout": 30000
+          },
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR && npm run lint --fix 2>/dev/null || echo '⚠️ Lint skipped'",
+            "timeout": 30000
+          },
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR && npm run type-check 2>/dev/null || echo '⚠️ Type check skipped'",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '✅ Claude Code session completed!'"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '🚀 PR Review System - Session started'"
+          },
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR && git status --short 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}
