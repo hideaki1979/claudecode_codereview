@@ -59,51 +59,61 @@ export async function basicAnalysisExample(): Promise<void> {
 export async function detailedAnalysisExample(
   params: GetPullRequestParams
 ): Promise<void> {
-  const pr = await getPullRequest(params);
-  const diff = await getPullRequestDiff(params);
+  try {
 
-  const result = analyzePullRequest(pr, diff);
+    const pr = await getPullRequest(params);
+    const diff = await getPullRequestDiff(params);
 
-  if (result.status === 'success') {
-    const { complexity, impact, risk } = result.data;
+    const result = analyzePullRequest(pr, diff);
 
-    console.log('=== Complexity Metrics ===');
-    console.log(`Lines changed: ${complexity.lines_changed}`);
-    console.log(`Files changed: ${complexity.files_changed}`);
-    console.log(`Avg changes per file: ${complexity.avg_changes_per_file}`);
-    console.log(`Complexity score: ${complexity.complexity_score}/100`);
-    console.log(`Complexity level: ${complexity.complexity_level}`);
+    if (result.status === 'success') {
+      const { complexity, impact, risk } = result.data;
 
-    console.log('\n=== Impact Metrics ===');
-    console.log(`Impact level: ${impact.impact_level}`);
-    console.log(`File types changed:`);
-    Object.entries(impact.file_types).forEach(([ext, count]) => {
-      console.log(`  ${ext}: ${count} files`);
-    });
-    if (impact.critical_files.length > 0) {
-      console.log(`\nCritical files changed:`);
-      impact.critical_files.forEach((file) => {
-        console.log(`  - ${file}`);
+      console.log('=== Complexity Metrics ===');
+      console.log(`Lines changed: ${complexity.lines_changed}`);
+      console.log(`Files changed: ${complexity.files_changed}`);
+      console.log(`Avg changes per file: ${complexity.avg_changes_per_file}`);
+      console.log(`Complexity score: ${complexity.complexity_score}/100`);
+      console.log(`Complexity level: ${complexity.complexity_level}`);
+
+      console.log('\n=== Impact Metrics ===');
+      console.log(`Impact level: ${impact.impact_level}`);
+      console.log(`File types changed:`);
+      Object.entries(impact.file_types).forEach(([ext, count]) => {
+        console.log(`  ${ext}: ${count} files`);
       });
-    }
-    console.log(`\nAffected directories: ${impact.affected_directories.length}`);
+      if (impact.critical_files.length > 0) {
+        console.log(`\nCritical files changed:`);
+        impact.critical_files.forEach((file) => {
+          console.log(`  - ${file}`);
+        });
+      }
+      console.log(`\nAffected directories: ${impact.affected_directories.length}`);
 
-    console.log('\n=== Risk Assessment ===');
-    console.log(`Risk level: ${risk.risk_level}`);
-    console.log(`Risk score: ${risk.risk_score}/100`);
-    console.log(`Risk factors:`);
-    console.log(`  Large diff: ${risk.factors.large_diff}`);
-    console.log(`  Many files: ${risk.factors.many_files}`);
-    console.log(`  Critical changes: ${risk.factors.critical_changes}`);
-    console.log(`  Config changes: ${risk.factors.config_changes}`);
-    if (risk.recommendations.length > 0) {
-      console.log(`\nRecommendations:`);
-      risk.recommendations.forEach((rec) => {
-        console.log(`  - ${rec}`);
-      });
-    }
+      console.log('\n=== Risk Assessment ===');
+      console.log(`Risk level: ${risk.risk_level}`);
+      console.log(`Risk score: ${risk.risk_score}/100`);
+      console.log(`Risk factors:`);
+      console.log(`  Large diff: ${risk.factors.large_diff}`);
+      console.log(`  Many files: ${risk.factors.many_files}`);
+      console.log(`  Critical changes: ${risk.factors.critical_changes}`);
+      console.log(`  Config changes: ${risk.factors.config_changes}`);
+      if (risk.recommendations.length > 0) {
+        console.log(`\nRecommendations:`);
+        risk.recommendations.forEach((rec) => {
+          console.log(`  - ${rec}`);
+        });
+      }
 
-    console.log(`\nAnalyzed at: ${result.data.analyzed_at}`);
+      console.log(`\nAnalyzed at: ${result.data.analyzed_at}`);
+    } else {
+      console.error(`Analysis failed: ${result.error}`);
+      if (result.code) {
+        console.error(`Error code: ${result.code}`);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch PR data:', error);
   }
 }
 
@@ -165,43 +175,52 @@ export async function apiRouteExample(
 export async function riskBasedActionsExample(
   params: GetPullRequestParams
 ): Promise<void> {
-  const pr = await getPullRequest(params);
-  const diff = await getPullRequestDiff(params);
+  try {
+    const pr = await getPullRequest(params);
+    const diff = await getPullRequestDiff(params);
 
-  const result = analyzePullRequest(pr, diff);
+    const result = analyzePullRequest(pr, diff);
 
-  if (result.status === 'success') {
-    const { risk_level, risk_score, recommendations } = result.data.risk;
+    if (result.status === 'success') {
+      const { risk_level, risk_score, recommendations } = result.data.risk;
 
-    // リスクレベルに応じた処理
-    switch (risk_level) {
-      case 'low':
-        console.log('✅ Low risk PR - standard review process');
-        break;
+      // リスクレベルに応じた処理
+      switch (risk_level) {
+        case 'low':
+          console.log('✅ Low risk PR - standard review process');
+          break;
 
-      case 'medium':
-        console.log('⚠️ Medium risk PR - careful review recommended');
-        console.log(`Risk score: ${risk_score}/100`);
-        break;
+        case 'medium':
+          console.log('⚠️ Medium risk PR - careful review recommended');
+          console.log(`Risk score: ${risk_score}/100`);
+          break;
 
-      case 'high':
-        console.log('🚨 High risk PR - multiple reviewers recommended');
-        console.log(`Risk score: ${risk_score}/100`);
-        console.log('Action items:');
-        recommendations.forEach((rec) => console.log(`  - ${rec}`));
-        // 例: 自動的にシニアレビュアーをアサインする
-        // await assignSeniorReviewer(params);
-        break;
+        case 'high':
+          console.log('🚨 High risk PR - multiple reviewers recommended');
+          console.log(`Risk score: ${risk_score}/100`);
+          console.log('Action items:');
+          recommendations.forEach((rec) => console.log(`  - ${rec}`));
+          // 例: 自動的にシニアレビュアーをアサインする
+          // await assignSeniorReviewer(params);
+          break;
 
-      case 'critical':
-        console.log('🔴 CRITICAL RISK PR - special attention required');
-        console.log(`Risk score: ${risk_score}/100`);
-        console.log('Mandatory actions:');
-        recommendations.forEach((rec) => console.log(`  - ${rec}`));
-        // 例: リードエンジニアに通知を送る
-        // await notifyLeadEngineer(params, result.data);
-        break;
+        case 'critical':
+          console.log('🔴 CRITICAL RISK PR - special attention required');
+          console.log(`Risk score: ${risk_score}/100`);
+          console.log('Mandatory actions:');
+          recommendations.forEach((rec) => console.log(`  - ${rec}`));
+          // 例: リードエンジニアに通知を送る
+          // await notifyLeadEngineer(params, result.data);
+          break;
+      }
+    } else {
+      console.error(`Analysis failed: ${result.error}`);
+      if (result.code) {
+        console.error(`Error code: ${result.code}`);
+      }
     }
+  } catch (error) {
+    console.error('Failed to fetch PR data:', error);
   }
 }
 
@@ -232,8 +251,8 @@ export async function batchAnalysisExample(
       } else {
         console.error(`PR #${pull_number}: Analysis failed - ${result.error}`);
       }
-    } catch {
-      console.error(`PR #${pull_number}: Failed to fetch data`);
+    } catch (error) {
+      console.error(`PR #${pull_number}: Failed to fetch data`, error);
     }
   }
 }

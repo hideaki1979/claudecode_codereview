@@ -101,13 +101,13 @@ export function calculateRisk(
 
   // 5.1: 要因別の推奨事項
   if (factors.large_diff) {
-    recommendations.push('Consider splitting this PR into smaller chunks');
+    recommendations.push('このPRをより小さなチャンクに分割することを検討してください');
   }
   if (factors.many_files) {
-    recommendations.push('Large number of files changed - ensure thorough testing');
+    recommendations.push('多数のファイルが変更されています - 徹底的なテストを確認してください');
   }
   if (factors.critical_changes) {
-    recommendations.push('Critical files modified - requires extra review attention');
+    recommendations.push('クリティカルなファイルが変更されています - 追加のレビュー注意が必要です');
   }
 
   // 5.2: リスクレベル別の推奨事項

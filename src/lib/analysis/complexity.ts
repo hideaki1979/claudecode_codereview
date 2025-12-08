@@ -1,4 +1,4 @@
-import type { GitHubPullRequest, GitHubDiff } from '@/types/github';
+import type { GitHubDiff } from '@/types/github';
 import type { ComplexityMetrics } from '@/types/analysis';
 
 /**
@@ -30,7 +30,6 @@ import type { ComplexityMetrics } from '@/types/analysis';
  * ```
  */
 export function calculateComplexity(
-  pr: GitHubPullRequest,
   diff: GitHubDiff
 ): ComplexityMetrics {
   // ステップ1: 基本メトリクスの集計

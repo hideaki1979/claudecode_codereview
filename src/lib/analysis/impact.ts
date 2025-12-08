@@ -7,7 +7,7 @@ import type { ImpactMetrics } from '@/types/analysis';
  * これらのファイルが変更された場合、影響レベルが「critical」に設定されます。
  * プロジェクトのインフラストラクチャや設定に関わる重要なファイルです。
  */
-const CRITICAL_FILES = [
+const CRITICAL_FILES = new Set([
   'package.json', // npm依存関係
   'package-lock.json', // npm依存関係のロック
   'tsconfig.json', // TypeScript設定
@@ -17,7 +17,7 @@ const CRITICAL_FILES = [
   '.env.local', // ローカル環境変数
   'Dockerfile', // Dockerイメージビルド定義
   'docker-compose.yml', // Dockerコンテナオーケストレーション
-] as const;
+]);
 
 /**
  * Pull Requestの変更が与える影響範囲を分析
@@ -65,7 +65,7 @@ export function analyzeImpact(diff: GitHubDiff): ImpactMetrics {
 
     // 2.2: クリティカルファイルのチェック
     const filename = file.filename.split('/').pop() || '';
-    if (CRITICAL_FILES.includes(filename as typeof CRITICAL_FILES[number])) {
+    if (CRITICAL_FILES.has(filename)) {
       critical_files.push(file.filename);
     }
 

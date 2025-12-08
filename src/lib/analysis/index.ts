@@ -1,5 +1,5 @@
 import type { GitHubPullRequest, GitHubDiff } from '@/types/github';
-import type { AnalysisResult } from '@/types/analysis';
+import type { AnalysisData, AnalysisResult } from '@/types/analysis';
 import { calculateComplexity } from './complexity';
 import { analyzeImpact } from './impact';
 import { calculateRisk } from './risk';
@@ -83,6 +83,37 @@ import { calculateRisk } from './risk';
  * }
  * ```
  */
+
+function createEmptyAnalysisData(): AnalysisData {
+  return {
+    complexity: {
+      lines_changed: 0,
+      files_changed: 0,
+      avg_changes_per_file: 0,
+      complexity_score: 0,
+      complexity_level: 'low',
+    },
+    impact: {
+      file_types: {},
+      critical_files: [],
+      affected_directories: [],
+      impact_level: 'low',
+    },
+    risk: {
+      risk_score: 0,
+      risk_level: 'low',
+      factors: {
+        large_diff: false,
+        many_files: false,
+        critical_changes: false,
+        config_changes: false,
+      },
+      recommendations: [],
+    },
+    analyzed_at: new Date().toISOString(),
+  }
+}
+
 export function analyzePullRequest(
   pr: GitHubPullRequest,
   diff: GitHubDiff
@@ -102,40 +133,13 @@ export function analyzePullRequest(
       // 変更のないPRは成功として扱い、最小限の分析結果を返す
       return {
         status: 'success',
-        data: {
-          complexity: {
-            lines_changed: 0,
-            files_changed: 0,
-            avg_changes_per_file: 0,
-            complexity_score: 0,
-            complexity_level: 'low',
-          },
-          impact: {
-            file_types: {},
-            critical_files: [],
-            affected_directories: [],
-            impact_level: 'low',
-          },
-          risk: {
-            risk_score: 0,
-            risk_level: 'low',
-            factors: {
-              large_diff: false,
-              many_files: false,
-              critical_changes: false,
-              config_changes: false,
-            },
-            recommendations: [],
-          },
-          analyzed_at: new Date().toISOString(),
-        },
-      };
-    }
-
+        data: createEmptyAnalysisData()
+      }
+    };
     // ステップ3: 分析の実行
 
     // 3.1: 複雑度の計算
-    const complexity = calculateComplexity(pr, diff);
+    const complexity = calculateComplexity(diff);
 
     // 3.2: 影響範囲の分析
     const impact = analyzeImpact(diff);
