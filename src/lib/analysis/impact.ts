@@ -1,23 +1,6 @@
 import type { GitHubDiff } from '@/types/github';
 import type { ImpactMetrics } from '@/types/analysis';
-
-/**
- * クリティカルファイルのリスト
- *
- * これらのファイルが変更された場合、影響レベルが「critical」に設定されます。
- * プロジェクトのインフラストラクチャや設定に関わる重要なファイルです。
- */
-const CRITICAL_FILES = new Set([
-  'package.json', // npm依存関係
-  'package-lock.json', // npm依存関係のロック
-  'tsconfig.json', // TypeScript設定
-  'next.config.js', // Next.js設定（JavaScript）
-  'next.config.ts', // Next.js設定（TypeScript）
-  '.env', // 環境変数
-  '.env.local', // ローカル環境変数
-  'Dockerfile', // Dockerイメージビルド定義
-  'docker-compose.yml', // Dockerコンテナオーケストレーション
-]);
+import { CRITICAL_FILES, IMPACT } from './constants';
 
 /**
  * Pull Requestの変更が与える影響範囲を分析
@@ -82,10 +65,16 @@ export function analyzeImpact(diff: GitHubDiff): ImpactMetrics {
   if (critical_files.length > 0) {
     // クリティカルファイルが変更されている場合は最高レベル
     impact_level = 'critical';
-  } else if (affected_directories.size > 10 || diff.files.length > 30) {
+  } else if (
+    affected_directories.size > IMPACT.THRESHOLD.HIGH_DIRECTORIES ||
+    diff.files.length > IMPACT.THRESHOLD.HIGH_FILES
+  ) {
     // 広範囲なディレクトリまたは多数のファイルに影響
     impact_level = 'high';
-  } else if (affected_directories.size > 5 || diff.files.length > 15) {
+  } else if (
+    affected_directories.size > IMPACT.THRESHOLD.MEDIUM_DIRECTORIES ||
+    diff.files.length > IMPACT.THRESHOLD.MEDIUM_FILES
+  ) {
     // 中程度の範囲に影響
     impact_level = 'medium';
   } else {

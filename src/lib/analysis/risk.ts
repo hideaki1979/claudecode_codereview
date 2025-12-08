@@ -1,4 +1,5 @@
 import type { ComplexityMetrics, ImpactMetrics, RiskAssessment } from '@/types/analysis';
+import { RISK } from './constants';
 
 /**
  * 複雑度と影響範囲を組み合わせた総合的なリスクスコアを計算
@@ -39,24 +40,24 @@ export function calculateRisk(
   // ステップ1: 基本リスクの計算
 
   // 1.1: 複雑度からのリスク（40%の重み）
-  const complexityRisk = complexity.complexity_score * 0.4;
+  const complexityRisk = complexity.complexity_score * RISK.WEIGHT.COMPLEXITY;
 
   // 1.2: 影響レベルからのリスク（60%の重み）
   // 影響レベルに対応する重み付け
   const impactWeights = {
-    low: 20, // 低影響: 20点
-    medium: 50, // 中影響: 50点
-    high: 75, // 高影響: 75点
-    critical: 100, // 最重要: 100点
+    low: RISK.IMPACT_SCORE.LOW, // 低影響: 20点
+    medium: RISK.IMPACT_SCORE.MEDIUM, // 中影響: 50点
+    high: RISK.IMPACT_SCORE.HIGH, // 高影響: 75点
+    critical: RISK.IMPACT_SCORE.CRITICAL, // 最重要: 100点
   };
-  const impactRisk = impactWeights[impact.impact_level] * 0.6;
+  const impactRisk = impactWeights[impact.impact_level] * RISK.WEIGHT.IMPACT;
 
   // ステップ2: リスク要因の判定
   const factors = {
     // 大規模な差分（500行超）
-    large_diff: complexity.lines_changed > 500,
+    large_diff: complexity.lines_changed > RISK.FACTOR_THRESHOLD.LARGE_DIFF_LINES,
     // 多数のファイル変更（20ファイル超）
-    many_files: complexity.files_changed > 20,
+    many_files: complexity.files_changed > RISK.FACTOR_THRESHOLD.MANY_FILES_COUNT,
     // クリティカルファイルの変更あり
     critical_changes: impact.critical_files.length > 0,
     // 設定ファイルの変更あり（package.jsonや設定ファイル）
@@ -69,28 +70,28 @@ export function calculateRisk(
   let risk_score = complexityRisk + impactRisk;
 
   if (factors.large_diff) {
-    risk_score += 5; // 大規模差分のペナルティ
+    risk_score += RISK.PENALTY.LARGE_DIFF; // 大規模差分のペナルティ
   }
   if (factors.many_files) {
-    risk_score += 5; // 多数ファイルのペナルティ
+    risk_score += RISK.PENALTY.MANY_FILES; // 多数ファイルのペナルティ
   }
   if (factors.critical_changes) {
-    risk_score += 10; // クリティカル変更の大きなペナルティ
+    risk_score += RISK.PENALTY.CRITICAL_CHANGES; // クリティカル変更の大きなペナルティ
   }
   if (factors.config_changes) {
-    risk_score += 5; // 設定変更のペナルティ
+    risk_score += RISK.PENALTY.CONFIG_CHANGES; // 設定変更のペナルティ
   }
 
   // 3.1: スコアを0-100の範囲に制限し、整数に丸める
-  risk_score = Math.min(Math.round(risk_score), 100);
+  risk_score = Math.min(Math.round(risk_score), RISK.MAX_SCORE);
 
   // ステップ4: リスクレベルの判定
   let risk_level: 'low' | 'medium' | 'high' | 'critical';
-  if (risk_score <= 30) {
+  if (risk_score <= RISK.THRESHOLD.LOW) {
     risk_level = 'low'; // 0-30点: 低リスク
-  } else if (risk_score <= 60) {
+  } else if (risk_score <= RISK.THRESHOLD.MEDIUM) {
     risk_level = 'medium'; // 31-60点: 中リスク
-  } else if (risk_score <= 85) {
+  } else if (risk_score <= RISK.THRESHOLD.HIGH) {
     risk_level = 'high'; // 61-85点: 高リスク
   } else {
     risk_level = 'critical'; // 86-100点: 最高リスク

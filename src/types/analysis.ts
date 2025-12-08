@@ -98,7 +98,7 @@ export interface AnalysisData {
  *
  * @example
  * ```typescript
- * const result = analyzePullRequest(pr, diff);
+ * const result = analyzePullRequest(diff);
  *
  * if (result.status === 'success') {
  *   // result.data が利用可能（TypeScriptが型を推論）
@@ -111,16 +111,16 @@ export interface AnalysisData {
  */
 export type AnalysisResult =
   | {
-      /** 分析成功を示すステータス */
-      status: 'success';
-      /** 分析データ */
-      data: AnalysisData;
-    }
+    /** 分析成功を示すステータス */
+    status: 'success';
+    /** 分析データ */
+    data: AnalysisData;
+  }
   | {
-      /** 分析失敗を示すステータス */
-      status: 'error';
-      /** エラーメッセージ */
-      error: string;
-      /** エラーコード（オプション） */
-      code?: 'INVALID_INPUT' | 'ANALYSIS_FAILED';
-    };
+    /** 分析失敗を示すステータス */
+    status: 'error';
+    /** エラーメッセージ */
+    error: string;
+    /** エラーコード（オプション） */
+    code?: 'INVALID_INPUT' | 'ANALYSIS_FAILED';
+  };

@@ -1,5 +1,6 @@
 import type { GitHubDiff } from '@/types/github';
 import type { ComplexityMetrics } from '@/types/analysis';
+import { COMPLEXITY } from './constants';
 
 /**
  * Pull Requestの複雑度メトリクスを計算
@@ -37,24 +38,33 @@ export function calculateComplexity(diff: GitHubDiff): ComplexityMetrics {
 
   // 2.1: 変更行数スコア（対数スケール、最大50点）
   // 対数を使用することで、1000行と10000行の差が線形にならないようにする
-  const lineScore = Math.min(Math.log10(lines_changed + 1) * 20, 50);
+  const lineScore = Math.min(
+    Math.log10(lines_changed + 1) * COMPLEXITY.SCORE.LINE_LOG_MULTIPLIER,
+    COMPLEXITY.SCORE.MAX_LINE_SCORE
+  );
 
   // 2.2: ファイル数スコア（線形スケール、最大30点）
   // ファイル数が多いと複雑度が増加（1ファイル = 2点）
-  const fileScore = Math.min(files_changed * 2, 30);
+  const fileScore = Math.min(
+    files_changed * COMPLEXITY.SCORE.FILE_MULTIPLIER,
+    COMPLEXITY.SCORE.MAX_FILE_SCORE
+  );
 
   // 2.3: 密度スコア（ファイルあたりの変更量、最大20点）
   // ファイルあたりの変更が多いと、各ファイルが複雑になる
-  const densityScore = Math.min(avg_changes_per_file / 10, 20);
+  const densityScore = Math.min(
+    avg_changes_per_file / COMPLEXITY.SCORE.DENSITY_DIVISOR,
+    COMPLEXITY.SCORE.MAX_DENSITY_SCORE
+  );
 
   // 2.4: 合計スコア（0-100の範囲で丸める）
   const complexity_score = Math.round(lineScore + fileScore + densityScore);
 
   // ステップ3: 複雑度レベルの判定
   let complexity_level: 'low' | 'medium' | 'high';
-  if (complexity_score <= 30) {
+  if (complexity_score <= COMPLEXITY.THRESHOLD.LOW) {
     complexity_level = 'low'; // 0-30点: 低複雑度
-  } else if (complexity_score <= 60) {
+  } else if (complexity_score <= COMPLEXITY.THRESHOLD.MEDIUM) {
     complexity_level = 'medium'; // 31-60点: 中複雑度
   } else {
     complexity_level = 'high'; // 61-100点: 高複雑度
@@ -64,7 +74,9 @@ export function calculateComplexity(diff: GitHubDiff): ComplexityMetrics {
   return {
     lines_changed,
     files_changed,
-    avg_changes_per_file: Math.round(avg_changes_per_file * 10) / 10, // 小数第1位まで
+    avg_changes_per_file:
+      Math.round(avg_changes_per_file * COMPLEXITY.SCORE.DECIMAL_PRECISION) /
+      COMPLEXITY.SCORE.DECIMAL_PRECISION, // 小数第1位まで
     complexity_score,
     complexity_level,
   };
