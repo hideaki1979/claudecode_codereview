@@ -24,7 +24,7 @@ import type { ComplexityMetrics, ImpactMetrics, RiskAssessment } from '@/types/a
  *
  * @example
  * ```typescript
- * const complexity = calculateComplexity(pr, diff);
+ * const complexity = calculateComplexity(diff);
  * const impact = analyzeImpact(diff);
  * const risk = calculateRisk(complexity, impact);
  *
@@ -112,7 +112,7 @@ export function calculateRisk(
 
   // 5.2: リスクレベル別の推奨事項
   if (risk_level === 'critical' || risk_level === 'high') {
-    recommendations.push('High risk PR - recommend multiple reviewers');
+    recommendations.push('高リスクのPRです - 複数のレビュアーによるレビューを推奨します');
   }
 
   // ステップ6: リスク評価の返却

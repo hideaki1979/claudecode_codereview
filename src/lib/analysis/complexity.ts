@@ -15,23 +15,19 @@ import type { ComplexityMetrics } from '@/types/analysis';
  * - densityScore: min(avg_changes / 10, 20) → 最大20点
  * - 合計: 0-100点
  *
- * @param pr - Pull Requestデータ
  * @param diff - 差分情報
  * @returns 複雑度メトリクス（0-100のスコアを含む）
  *
  * @example
  * ```typescript
- * const pr = await getPullRequest({ owner, repo, pull_number });
  * const diff = await getPullRequestDiff({ owner, repo, pull_number });
- * const complexity = calculateComplexity(pr, diff);
+ * const complexity = calculateComplexity(diff);
  *
  * console.log(`Complexity: ${complexity.complexity_level}`);
  * console.log(`Score: ${complexity.complexity_score}/100`);
  * ```
  */
-export function calculateComplexity(
-  diff: GitHubDiff
-): ComplexityMetrics {
+export function calculateComplexity(diff: GitHubDiff): ComplexityMetrics {
   // ステップ1: 基本メトリクスの集計
   const lines_changed = diff.total_additions + diff.total_deletions;
   const files_changed = diff.files.length;

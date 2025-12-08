@@ -6,7 +6,7 @@
  */
 
 import { analyzePullRequest } from './index';
-import { getPullRequest, getPullRequestDiff } from '@/lib/github';
+import { getPullRequestDiff } from '@/lib/github';
 import type { GetPullRequestParams } from '@/types/github';
 
 /**
@@ -22,12 +22,11 @@ export async function basicAnalysisExample(): Promise<void> {
   };
 
   try {
-    // ステップ1: PR情報と差分を取得
-    const pr = await getPullRequest(params);
+    // ステップ1: 差分を取得
     const diff = await getPullRequestDiff(params);
 
     // ステップ2: 分析を実行
-    const result = analyzePullRequest(pr, diff);
+    const result = analyzePullRequest(diff);
 
     // ステップ3: 結果の処理（型安全なパターンマッチング）
     if (result.status === 'success') {
@@ -60,11 +59,9 @@ export async function detailedAnalysisExample(
   params: GetPullRequestParams
 ): Promise<void> {
   try {
-
-    const pr = await getPullRequest(params);
     const diff = await getPullRequestDiff(params);
 
-    const result = analyzePullRequest(pr, diff);
+    const result = analyzePullRequest(diff);
 
     if (result.status === 'success') {
       const { complexity, impact, risk } = result.data;
@@ -129,12 +126,11 @@ export async function apiRouteExample(
   pull_number: number
 ): Promise<Response> {
   try {
-    // PR情報と差分を取得
-    const pr = await getPullRequest({ owner, repo, pull_number });
+    // 差分を取得
     const diff = await getPullRequestDiff({ owner, repo, pull_number });
 
     // 分析を実行
-    const result = analyzePullRequest(pr, diff);
+    const result = analyzePullRequest(diff);
 
     // 結果に応じてレスポンスを返す
     if (result.status === 'success') {
@@ -176,10 +172,9 @@ export async function riskBasedActionsExample(
   params: GetPullRequestParams
 ): Promise<void> {
   try {
-    const pr = await getPullRequest(params);
     const diff = await getPullRequestDiff(params);
 
-    const result = analyzePullRequest(pr, diff);
+    const result = analyzePullRequest(diff);
 
     if (result.status === 'success') {
       const { risk_level, risk_score, recommendations } = result.data.risk;
@@ -238,10 +233,9 @@ export async function batchAnalysisExample(
 
   for (const pull_number of pullNumbers) {
     try {
-      const pr = await getPullRequest({ owner, repo, pull_number });
       const diff = await getPullRequestDiff({ owner, repo, pull_number });
 
-      const result = analyzePullRequest(pr, diff);
+      const result = analyzePullRequest(diff);
 
       if (result.status === 'success') {
         const { risk_level, risk_score } = result.data.risk;
@@ -251,7 +245,7 @@ export async function batchAnalysisExample(
       } else {
         console.error(`PR #${pull_number}: Analysis failed - ${result.error}`);
       }
-    } catch (error) {
+    } catch (error){
       console.error(`PR #${pull_number}: Failed to fetch data`, error);
     }
   }

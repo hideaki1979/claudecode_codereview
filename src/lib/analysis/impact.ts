@@ -58,9 +58,9 @@ export function analyzeImpact(diff: GitHubDiff): ImpactMetrics {
   // ステップ2: 各ファイルの分析
   for (const file of diff.files) {
     // 2.1: ファイル拡張子の抽出とカウント
-    const ext = file.filename.includes('.')
-      ? '.' + file.filename.split('.').pop()
-      : 'no-ext'; // 拡張子なしのファイル（README、Dockerfileなど）
+    const lastDotIndex = file.filename.lastIndexOf('.');
+    const lastSlashIndex = file.filename.lastIndexOf('/');
+    const ext = lastDotIndex > lastSlashIndex ? file.filename.substring(lastDotIndex) : 'no-ext'; // 拡張子なしのファイル（README、Dockerfileなど）
     file_types[ext] = (file_types[ext] || 0) + 1;
 
     // 2.2: クリティカルファイルのチェック

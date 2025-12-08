@@ -1,17 +1,17 @@
-import type { GitHubPullRequest, GitHubDiff } from '@/types/github';
+import type { GitHubDiff } from '@/types/github';
 import type { AnalysisData, AnalysisResult } from '@/types/analysis';
 import { calculateComplexity } from './complexity';
 import { analyzeImpact } from './impact';
 import { calculateRisk } from './risk';
 
 /**
- * Pull Requestを包括的に分析
+ * Pull Requestの差分を包括的に分析
  *
  * このメイン関数は、PR分析のエントリーポイントです。
  * 複雑度計算、影響範囲分析、リスク評価を統合的に実行します。
  *
  * 分析プロセス：
- * 1. 入力の検証（PR情報と差分情報の妥当性チェック）
+ * 1. 入力の検証（差分情報の妥当性チェック）
  * 2. 複雑度の計算（変更量、ファイル数、密度の評価）
  * 3. 影響範囲の分析（ファイルタイプ、クリティカルファイル、ディレクトリ）
  * 4. リスクの評価（複雑度と影響範囲を組み合わせた総合評価）
@@ -20,9 +20,8 @@ import { calculateRisk } from './risk';
  * エラーハンドリング：
  * - 入力が不正な場合: INVALID_INPUT エラーコード
  * - 分析中に例外が発生した場合: ANALYSIS_FAILED エラーコード
- * - 空のPR（変更なし）: 成功として扱い、すべてのメトリクスを0/lowに設定
+ * - 空の差分（変更なし）: 成功として扱い、すべてのメトリクスを0/lowに設定
  *
- * @param pr - GitHub APIから取得したPull Requestデータ
  * @param diff - GitHub APIから取得した差分情報（ファイル変更の詳細）
  * @returns 成功/失敗を示すステータス付きの分析結果
  *
@@ -30,20 +29,15 @@ import { calculateRisk } from './risk';
  * ```typescript
  * // 基本的な使用例
  * import { analyzePullRequest } from '@/lib/analysis';
- * import { getPullRequest, getPullRequestDiff } from '@/lib/github';
+ * import { getPullRequestDiff } from '@/lib/github';
  *
- * const pr = await getPullRequest({
- *   owner: 'facebook',
- *   repo: 'react',
- *   pull_number: 12345
- * });
  * const diff = await getPullRequestDiff({
  *   owner: 'facebook',
  *   repo: 'react',
  *   pull_number: 12345
  * });
  *
- * const result = analyzePullRequest(pr, diff);
+ * const result = analyzePullRequest(diff);
  *
  * // 型安全なパターンマッチング
  * if (result.status === 'success') {
@@ -67,10 +61,9 @@ import { calculateRisk } from './risk';
  * import { NextResponse } from 'next/server';
  *
  * export async function GET(request: Request) {
- *   const pr = await getPullRequest({ owner, repo, pull_number });
  *   const diff = await getPullRequestDiff({ owner, repo, pull_number });
  *
- *   const result = analyzePullRequest(pr, diff);
+ *   const result = analyzePullRequest(diff);
  *
  *   if (result.status === 'success') {
  *     return NextResponse.json(result.data);
@@ -114,16 +107,13 @@ function createEmptyAnalysisData(): AnalysisData {
   }
 }
 
-export function analyzePullRequest(
-  pr: GitHubPullRequest,
-  diff: GitHubDiff
-): AnalysisResult {
+export function analyzePullRequest(diff: GitHubDiff): AnalysisResult {
   try {
     // ステップ1: 入力の検証
-    if (!pr || !diff) {
+    if (!diff) {
       return {
         status: 'error',
-        error: 'Invalid input: pr and diff are required',
+        error: 'Invalid input: diff is required',
         code: 'INVALID_INPUT',
       };
     }
@@ -134,8 +124,8 @@ export function analyzePullRequest(
       return {
         status: 'success',
         data: createEmptyAnalysisData()
-      }
-    };
+      };
+    }
     // ステップ3: 分析の実行
 
     // 3.1: 複雑度の計算
