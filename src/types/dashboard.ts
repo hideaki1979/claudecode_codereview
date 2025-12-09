@@ -4,7 +4,7 @@
  * Type definitions for the PR analysis dashboard components
  */
 
-import type { GitHubPullRequest } from './github';
+import type { GitHubPullRequestSimple } from './github';
 import type { AnalysisData } from './analysis';
 
 /**
@@ -13,7 +13,7 @@ import type { AnalysisData } from './analysis';
  * Combines GitHub PR data with our analysis results
  */
 export interface PRWithAnalysis {
-  pr: GitHubPullRequest;
+  pr: GitHubPullRequestSimple;
   analysis: AnalysisData;
 }
 

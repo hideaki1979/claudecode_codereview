@@ -10,8 +10,16 @@ export default function DashboardLoading(): React.JSX.Element {
       {/* Header Skeleton */}
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="h-8 w-64 animate-pulse rounded bg-gray-200" />
-          <div className="mt-2 h-4 w-48 animate-pulse rounded bg-gray-200" />
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="h-8 w-64 animate-pulse rounded bg-gray-200" />
+              <div className="mt-2 h-4 w-48 animate-pulse rounded bg-gray-200" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-gray-200" />
+              <div className="h-4 w-16 animate-pulse rounded bg-gray-200" />
+            </div>
+          </div>
         </div>
       </header>
 

@@ -16,6 +16,7 @@ import {
   Clock,
 } from 'lucide-react';
 import type { PRWithAnalysis, RiskLevel } from '@/types/dashboard';
+import { ja } from 'date-fns/locale';
 
 interface PRCardProps {
   data: PRWithAnalysis;
@@ -111,7 +112,7 @@ export function PRCard({ data }: PRCardProps): React.JSX.Element {
         </div>
         <div className="flex items-center gap-1">
           <Clock className="h-4 w-4" />
-          <span>{formatDistanceToNow(new Date(pr.created_at), { addSuffix: true })}</span>
+          <span>{formatDistanceToNow(new Date(pr.created_at), { addSuffix: true, locale: ja })}</span>
         </div>
       </div>
 

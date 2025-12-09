@@ -30,6 +30,9 @@ export function DashboardContent({ initialData }: DashboardContentProps): React.
         if (filters.status === 'merged') {
           return item.pr.merged_at !== null;
         }
+        if (filters.status === 'closed') {
+          return item.pr.state === 'closed' && item.pr.merged_at === null;
+        }
         return item.pr.state === filters.status;
       });
     }
@@ -91,7 +94,9 @@ export function DashboardContent({ initialData }: DashboardContentProps): React.
               ))}
             </div>
           ) : (
-            <EmptyState hasFilters={Object.keys(filters).length > 0} />
+            <EmptyState hasFilters={Boolean(
+              filters.status || filters.riskLevel || (filters.search && filters.search.trim() !== '')
+            )} />
           )}
         </div>
       </div>

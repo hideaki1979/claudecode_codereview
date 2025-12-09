@@ -38,7 +38,7 @@ export function PRFilter({ onFilterChange, defaultValues }: PRFilterProps): Reac
     const filters: FilterOptions = {
       status: data.status === 'all' ? undefined : (data.status as FilterOptions['status']),
       riskLevel: data.riskLevel === 'all' ? undefined : (data.riskLevel as FilterOptions['riskLevel']),
-      search: data.search || undefined,
+      search: data.search?.trim() || undefined,
     };
     onFilterChange(filters);
   };

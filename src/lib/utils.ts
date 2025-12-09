@@ -18,6 +18,7 @@ export function formatNumber(num: number): string {
  */
 export function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
+  if (maxLength <= 3) return '...'.slice(0, maxLength);
   return text.slice(0, maxLength - 3) + '...';
 }
 

@@ -4,12 +4,10 @@
  * Main dashboard for displaying PR analysis results
  */
 
-import { Suspense } from 'react';
 import { getPullRequestDiff, listPullRequests } from '@/lib/github';
 import { analyzePullRequest } from '@/lib/analysis';
 import { DashboardContent } from './DashboardContent';
 import type { PRWithAnalysis } from '@/types/dashboard';
-import type { GitHubPullRequest } from '@/types/github';
 
 /**
  * Fetch and analyze PRs from GitHub
@@ -41,7 +39,7 @@ async function fetchPRsWithAnalysis(): Promise<PRWithAnalysis[]> {
         // Return PR with analysis if successful
         if (result.status === 'success') {
           return {
-            pr: pr as GitHubPullRequest,
+            pr,
             analysis: result.data,
           };
         }
@@ -95,9 +93,7 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Suspense fallback={<DashboardSkeleton />}>
-          <DashboardContent initialData={data} />
-        </Suspense>
+        <DashboardContent initialData={data} />
       </main>
 
       {/* Footer */}
@@ -108,30 +104,6 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
           </p>
         </div>
       </footer>
-    </div>
-  );
-}
-
-/**
- * Loading Skeleton
- */
-function DashboardSkeleton(): React.JSX.Element {
-  return (
-    <div className="space-y-6">
-      {/* Chart Skeleton */}
-      <div className="h-64 animate-pulse rounded-lg bg-gray-200" />
-
-      {/* Grid Skeleton */}
-      <div className="grid gap-6 lg:grid-cols-4">
-        <div className="lg:col-span-1">
-          <div className="h-96 animate-pulse rounded-lg bg-gray-200" />
-        </div>
-        <div className="lg:col-span-3 space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-48 animate-pulse rounded-lg bg-gray-200" />
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
