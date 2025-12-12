@@ -98,7 +98,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         'GitHubトークンが設定されていません',
         'UNAUTHORIZED',
         HTTP_STATUS.UNAUTHORIZED
-      )
+      );
     }
 
     // ステップ1: リクエストボディの解析
