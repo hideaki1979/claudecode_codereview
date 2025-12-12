@@ -80,8 +80,9 @@ export function parseSearchParams(searchParams: URLSearchParams): Record<string,
 
   for (const [key, value] of searchParams.entries()) {
     // 数値文字列を数値に変換
-    if (!isNaN(Number(value)) && value !== '') {
-      params[key] = Number(value);
+    const trimmedValue = value.trim();
+    if (trimmedValue !== '' && /^\d+$/.test(trimmedValue)) {
+      params[key] = Number(trimmedValue);
     } else {
       params[key] = value;
     }

@@ -130,10 +130,10 @@ function mapErrorToResponse(error: Error): {
 export async function GET(request: NextRequest): Promise<NextResponse<ApiListResponse>> {
   try {
     // 認証チェック
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) {
       return createErrorResponse(
-        '認証が必要です',
+        'GitHubトークンが設定されていません',
         'UNAUTHORIZED',
         HTTP_STATUS.UNAUTHORIZED
       );
@@ -238,6 +238,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiListRes
  */
 export async function POST(request: NextRequest): Promise<NextResponse<ApiPullRequestResponse>> {
   try {
+    // 認証チェック
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) {
+      return createErrorResponse(
+        'GitHubトークンが設定されていません',
+        'UNAUTHORIZED',
+        HTTP_STATUS.UNAUTHORIZED
+      );
+    }
+
     // ステップ1: リクエストボディの解析とバリデーション
     let body: unknown;
     try {
@@ -283,7 +293,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiPullRe
         status: HTTP_STATUS.OK,
         headers: {
           'X-Cache': 'HIT',
-          'Cache-Control': `private, max-age=${rateLimitMonitor.getOptimalCacheTTL()}`, 
+          'Cache-Control': `private, max-age=${rateLimitMonitor.getOptimalCacheTTL()}`,
         },
       });
     }

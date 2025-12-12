@@ -125,7 +125,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const {owner, repo, pull_number} = parseResult.data;
+    const { owner, repo, pull_number } = parseResult.data;
 
     const params: GetPullRequestDiffParams = {
       owner,
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const cacheTtlSeconds = rateLimitMonitor.getOptimalCacheTTL();
 
     // ステップ5: 結果をキャッシュ
-    cache.set(cacheKey, { data: diff, rateLimit });
+    cache.set(cacheKey, { data: diff, rateLimit }, cacheTtlSeconds);
 
     // ステップ6: 成功レスポンスを返す
     return NextResponse.json(

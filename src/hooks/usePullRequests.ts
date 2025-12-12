@@ -145,10 +145,18 @@ export function usePullRequests(
   // fetchDataの最新の参照を保持（再帰呼び出し用）
   const fetchDataRef = useRef<((retryCount?: number) => Promise<void>) | null>(null);
 
+  // paramsをrefで保持（無限ループを防ぐため）
+  const paramRef = useRef(params);
+
   // retryが変更されたらrefを更新
   useEffect(() => {
     retryRef.current = retry;
   }, [retry]);
+
+  // paramsが変更されたらrefを更新
+  useEffect(() => {
+    paramRef.current = params;
+  }, [params]);
 
   // データ取得関数（useCallbackでメモ化）
   const fetchData = useCallback(
@@ -164,8 +172,8 @@ export function usePullRequests(
       });
 
       try {
-        // API 呼び出し
-        const response = await listPullRequests(params);
+        // API 呼び出し（refから最新のparamsを取得）
+        const response = await listPullRequests(paramRef.current);
 
         // レスポンスの型チェック
         if (response.success) {
@@ -234,7 +242,7 @@ export function usePullRequests(
         });
       }
     },
-    [params]
+    []
   );
 
   // fetchDataの最新の参照をrefに保存
@@ -244,17 +252,20 @@ export function usePullRequests(
 
   // 初回マウント時とパラメータ変更時にデータ取得
   useEffect(() => {
-    if (enabled) {
+    if (!enabled) {
       return;
     }
 
     // 非同期関数を定義して、setStateの呼び出しを非同期コンテキストに移動
     const executeFetch = async (): Promise<void> => {
-      await fetchData();
+      // refから最新のfetchDataを取得
+      if (fetchDataRef.current) {
+        await fetchDataRef.current();
+      }
     }
 
     void executeFetch();
-  }, [enabled, fetchData]);
+  }, [enabled, params.owner, params.repo, params.state, params.sort, params.direction, params.per_page, params.page]);
 
   // 定期的な再取得
   useEffect(() => {
@@ -263,18 +274,26 @@ export function usePullRequests(
     }
 
     const intervalId = setInterval(() => {
-      void fetchData();
+      // refから最新のfetchDataを取得
+      if (fetchDataRef.current) {
+        void fetchDataRef.current();
+      }
     }, refetchInterval);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [refetchInterval, enabled, fetchData]);
+  }, [refetchInterval, enabled]);
 
   // 戻り値
   return {
     ...state,
-    refetch: fetchData,
+    refetch: async (): Promise<void> => {
+      // refから最新のfetchDataを取得
+      if (fetchDataRef.current) {
+        await fetchDataRef.current();
+      }
+    },
     isLoading: state.status === 'loading',
     hasData: state.status === 'success',
     hasError: state.status === 'error',
