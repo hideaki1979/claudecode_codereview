@@ -1,4 +1,5 @@
 import type {
+  GitHubDiff,
   GitHubPullRequest,
   GitHubPullRequestSimple,
   PaginationInfo,
@@ -14,6 +15,7 @@ export interface SuccessListResponse {
   data: GitHubPullRequestSimple[];
   pagination: PaginationInfo;
   rateLimit: RateLimitInfo;
+  cacheHit: boolean;
 }
 
 // Success response for single pull request
@@ -21,6 +23,7 @@ export interface SuccessPullRequestResponse {
   success: true;
   data: GitHubPullRequest;
   rateLimit: RateLimitInfo;
+  cacheHit: boolean;
 }
 
 // Error response
@@ -36,6 +39,7 @@ export interface ErrorResponse {
 // Discriminated union for all API responses
 export type ApiListResponse = SuccessListResponse | ErrorResponse;
 export type ApiPullRequestResponse = SuccessPullRequestResponse | ErrorResponse;
+export type ApiDiffResponse = SuccessDiffResponse | ErrorResponse;
 
 /**
  * Error Codes
@@ -47,9 +51,7 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'RATE_LIMIT_EXCEEDED'
   | 'INTERNAL_ERROR'
-  | 'GITHUB_API_ERROR'
-  | 'INVALID_TOKEN'
-  | 'MISSING_TOKEN';
+  | 'GITHUB_API_ERROR';
 
 /**
  * Rate Limit Information
@@ -111,3 +113,10 @@ export const CACHE_CONFIG = {
   TTL: 900, // 15 minutes in seconds
   MAX_ENTRIES: 100,
 } as const;
+
+export interface SuccessDiffResponse {
+  success: true;
+  data: GitHubDiff;
+  rateLimit: RateLimitInfo;
+  cacheHit: boolean;
+} 

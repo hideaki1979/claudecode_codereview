@@ -10,8 +10,9 @@ import type {
   ListPullRequestsQuery,
   GetPullRequestBody,
   ErrorResponse,
+  SuccessDiffResponse,
 } from '@/types/api';
-import type { GitHubDiff, GetPullRequestDiffParams } from '@/types/github';
+import type { GetPullRequestDiffParams } from '@/types/github';
 
 /**
  * API エラークラス
@@ -49,7 +50,16 @@ async function fetchAPI<T>(
 
     // レスポンスが OK でない場合はエラー
     if (!response.ok) {
-      const errorData: ErrorResponse = await response.json();
+      let errorData: ErrorResponse
+      try {
+        errorData = await response.json();
+      } catch {
+        throw new ApiError(
+          'INTERNAL_ERROR',
+          `HTTP ${response.status}: ${response.statusText}`
+        );
+      }
+
       throw new ApiError(
         errorData.error.code,
         errorData.error.message,
@@ -170,8 +180,8 @@ export async function getPullRequest(
  */
 export async function getPullRequestDiffAPI(
   params: GetPullRequestDiffParams
-): Promise<{ success: true; data: GitHubDiff } | ErrorResponse> {
-  return fetchAPI<{ success: true; data: GitHubDiff }>('/api/github/diff', {
+): Promise<SuccessDiffResponse | ErrorResponse> {
+  return fetchAPI<SuccessDiffResponse>('/api/github/diff', {
     method: 'POST',
     body: JSON.stringify(params),
   });

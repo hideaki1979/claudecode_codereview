@@ -37,7 +37,7 @@ export default function DashboardPage(): React.JSX.Element {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <DashboardContent />
+        <DashboardContent owner="hideaki1979" repo="ud_Laravel12_catcafe" />
       </main>
 
       {/* Footer */}

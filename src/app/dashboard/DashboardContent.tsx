@@ -19,39 +19,58 @@ import type { GitHubPullRequestSimple } from '@/types/github';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 
 /**
+ * DashboardContent Component Props
+ */
+interface DashboardContentProps {
+  /**
+   * GitHubリポジトリの所有者
+   */
+  owner: string;
+
+  /**
+   * GitHubリポジトリ名
+   */
+  repo: string;
+}
+
+/**
  * DashboardContent Component
  *
  * PRデータの取得、分析、フィルタリング、表示を担当
  */
-export function DashboardContent(): React.JSX.Element | null {
+export function DashboardContent({
+  owner,
+  repo,
+}: DashboardContentProps): React.JSX.Element | null {
   const [filters, setFilters] = useState<FilterOptions>({});
   const [analyzedData, setAnalyzedData] = useState<PRWithAnalysis[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // GitHub API からプルリクエスト一覧を取得
   const prState = usePullRequests({
-    owner: 'hideaki1979',
-    repo: 'ud_Laravel12_catcafe',
+    owner,
+    repo,
     state: 'all',
     per_page: 20,
   });
 
   const { isLoading, hasError, hasData, refetch } = prState;
 
+  // prState.statusとprState.dataをuseMemoでメモ化（依存配列を明確にするため）
+  const prStatus = useMemo(() => prState.status, [prState.status]);
+  const prData = useMemo(() => {
+    return prState.status === 'success' ? prState.data : null;
+  }, [prState.status, prState.data]);
+
   // プルリクエストを取得したら分析を実行
   useEffect(() => {
     // データが取得できていない場合はスキップ
-    if (!hasData) {
+    if (!hasData || prStatus !== 'success' || !prData) {
       setAnalyzedData([]);
       return;
     }
 
-    // 型ガード: hasDataがtrueの場合、statusは'success'でdataが存在する
-    if (prState.status !== 'success') {
-      return; // 型安全性のため
-    }
-
-    const pullRequests = prState.data;
+    const pullRequests = prData;
 
     if (pullRequests.length === 0) {
       setAnalyzedData([]);
@@ -68,8 +87,8 @@ export function DashboardContent(): React.JSX.Element | null {
             try {
               // PR の差分を取得（APIルート経由）
               const diffResponse = await getPullRequestDiffAPI({
-                owner: 'hideaki1979',
-                repo: 'ud_Laravel12_catcafe',
+                owner,
+                repo,
                 pull_number: pr.number,
               });
 
@@ -113,8 +132,7 @@ export function DashboardContent(): React.JSX.Element | null {
     };
 
     void analyzeAllPRs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasData]);
+  }, [hasData, prStatus, prData, owner, repo]);
 
   // PR データをフィルタリング
   const filteredData = useMemo(() => {

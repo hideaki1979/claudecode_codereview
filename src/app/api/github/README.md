@@ -26,15 +26,15 @@ List pull requests from a GitHub repository.
 
 #### Query Parameters
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| owner | string | Yes | - | Repository owner |
-| repo | string | Yes | - | Repository name |
-| state | enum | No | 'open' | PR state: 'open', 'closed', 'all' |
-| sort | enum | No | 'created' | Sort by: 'created', 'updated', 'popularity', 'long-running' |
-| direction | enum | No | 'desc' | Sort direction: 'asc', 'desc' |
-| per_page | number | No | 30 | Items per page (1-100) |
-| page | number | No | 1 | Page number (>= 1) |
+| Parameter | Type   | Required | Default   | Description                                                 |
+| --------- | ------ | -------- | --------- | ----------------------------------------------------------- |
+| owner     | string | Yes      | -         | Repository owner                                            |
+| repo      | string | Yes      | -         | Repository name                                             |
+| state     | enum   | No       | 'open'    | PR state: 'open', 'closed', 'all'                           |
+| sort      | enum   | No       | 'created' | Sort by: 'created', 'updated', 'popularity', 'long-running' |
+| direction | enum   | No       | 'desc'    | Sort direction: 'asc', 'desc'                               |
+| per_page  | number | No       | 30        | Items per page (1-100)                                      |
+| page      | number | No       | 1         | Page number (>= 1)                                          |
 
 #### Example Request
 
@@ -84,11 +84,11 @@ Get detailed information about a specific pull request.
 
 #### Request Body
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| owner | string | Yes | Repository owner |
-| repo | string | Yes | Repository name |
-| pull_number | number | Yes | Pull request number (positive integer) |
+| Field       | Type   | Required | Description                            |
+| ----------- | ------ | -------- | -------------------------------------- |
+| owner       | string | Yes      | Repository owner                       |
+| repo        | string | Yes      | Repository name                        |
+| pull_number | number | Yes      | Pull request number (positive integer) |
 
 #### Example Request
 
@@ -153,17 +153,15 @@ interface ErrorResponse {
 
 ### Error Codes
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| VALIDATION_ERROR | 400 | Invalid request parameters |
-| UNAUTHORIZED | 401 | Missing or invalid GitHub token |
-| FORBIDDEN | 403 | Insufficient permissions |
-| NOT_FOUND | 404 | Repository or PR not found |
-| RATE_LIMIT_EXCEEDED | 429 | GitHub API rate limit exceeded |
-| INTERNAL_ERROR | 500 | Unexpected server error |
-| GITHUB_API_ERROR | 500 | GitHub API returned an error |
-| INVALID_TOKEN | 401 | Invalid token format |
-| MISSING_TOKEN | 401 | GitHub token not provided |
+| Code                | HTTP Status | Description                                                                                                 |
+| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| VALIDATION_ERROR    | 400         | Invalid request parameters                                                                                  |
+| UNAUTHORIZED        | 401         | Missing or invalid GitHub token (includes invalid token format, missing token, and authentication failures) |
+| FORBIDDEN           | 403         | Insufficient permissions                                                                                    |
+| NOT_FOUND           | 404         | Repository or PR not found                                                                                  |
+| RATE_LIMIT_EXCEEDED | 429         | GitHub API rate limit exceeded                                                                              |
+| INTERNAL_ERROR      | 500         | Unexpected server error                                                                                     |
+| GITHUB_API_ERROR    | 500         | GitHub API returned an error                                                                                |
 
 ### Example Error Response
 
@@ -189,7 +187,7 @@ The API implements a 15-minute in-memory cache:
 
 ### Cache Headers
 
-```
+```http
 Cache-Control: private, max-age=900
 X-Cache: HIT | MISS
 ```
@@ -197,6 +195,7 @@ X-Cache: HIT | MISS
 ## Rate Limiting
 
 GitHub API rate limits:
+
 - **Authenticated**: 5,000 requests/hour
 - **Unauthenticated**: 60 requests/hour
 
@@ -242,7 +241,7 @@ type ApiResponse = SuccessResponse | ErrorResponse;
 This allows for type-safe response handling:
 
 ```typescript
-const response = await fetch('/api/github?owner=facebook&repo=react');
+const response = await fetch("/api/github?owner=facebook&repo=react");
 const data = await response.json();
 
 if (data.success) {
@@ -257,38 +256,34 @@ if (data.success) {
 ## Usage in Client Components
 
 ```typescript
-'use client';
+"use client";
 
-import { useState } from 'react';
-import type { ApiListResponse } from '@/types/api';
+import { useState } from "react";
+import type { ApiListResponse } from "@/types/api";
 
 export default function PullRequestList() {
   const [prs, setPrs] = useState([]);
 
   async function fetchPullRequests() {
     const response = await fetch(
-      '/api/github?owner=facebook&repo=react&state=open&per_page=10'
+      "/api/github?owner=facebook&repo=react&state=open&per_page=10"
     );
 
     const data: ApiListResponse = await response.json();
 
     if (data.success) {
       setPrs(data.data);
-      console.log('Rate limit remaining:', data.rateLimit.remaining);
+      console.log("Rate limit remaining:", data.rateLimit.remaining);
     } else {
-      console.error('Error:', data.error.message);
+      console.error("Error:", data.error.message);
       // Handle specific error codes
-      if (data.error.code === 'RATE_LIMIT_EXCEEDED') {
+      if (data.error.code === "RATE_LIMIT_EXCEEDED") {
         // Show rate limit message to user
       }
     }
   }
 
-  return (
-    <button onClick={fetchPullRequests}>
-      Load Pull Requests
-    </button>
-  );
+  return <button onClick={fetchPullRequests}>Load Pull Requests</button>;
 }
 ```
 

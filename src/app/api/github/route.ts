@@ -17,21 +17,7 @@ import type {
   GitHubPullRequest,
   PaginationInfo,
 } from '@/types/github';
-
-/**
- * レスポンスヘッダーからレート制限情報を抽出
- *
- * 注: 現在の実装では使用していませんが、将来的にGitHub APIのレスポンスから
- * レート制限情報を取得する際に使用できます
- */
-// function extractRateLimit(headers: Headers): RateLimitInfo {
-//   return {
-//     limit: parseInt(headers.get('x-ratelimit-limit') || '5000', 10),
-//     remaining: parseInt(headers.get('x-ratelimit-remaining') || '5000', 10),
-//     reset: parseInt(headers.get('x-ratelimit-reset') || '0', 10),
-//     used: parseInt(headers.get('x-ratelimit-used') || '0', 10),
-//   };
-// }
+import { rateLimitMonitor } from '@/lib/rateLimit';
 
 /**
  * 標準化されたエラーレスポンスを作成
@@ -84,9 +70,9 @@ function mapErrorToResponse(error: Error): {
 
   if (errorMessage.includes('token')) {
     return {
-      code: 'INVALID_TOKEN',
+      code: 'UNAUTHORIZED',
       status: HTTP_STATUS.UNAUTHORIZED,
-      message: 'GitHubトークンの形式または権限が無効です。',
+      message: 'GitHubトークンが無効または不足しています。認証情報を確認してください。',
     };
   }
 
@@ -143,6 +129,16 @@ function mapErrorToResponse(error: Error): {
  */
 export async function GET(request: NextRequest): Promise<NextResponse<ApiListResponse>> {
   try {
+    // 認証チェック
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return createErrorResponse(
+        '認証が必要です',
+        'UNAUTHORIZED',
+        HTTP_STATUS.UNAUTHORIZED
+      );
+    }
+
     // ステップ1: クエリパラメータの解析とバリデーション
     const { searchParams } = new URL(request.url);
     const queryParams = parseSearchParams(searchParams);
@@ -166,6 +162,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiListRes
     const cachedData = cache.get<{
       data: GitHubPullRequestSimple[];
       pagination: PaginationInfo;
+      rateLimit: RateLimitInfo;
     }>(cacheKey);
 
     if (cachedData) {
@@ -173,12 +170,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiListRes
         success: true,
         data: cachedData.data,
         pagination: cachedData.pagination,
-        rateLimit: {
-          limit: 5000,
-          remaining: 5000,
-          reset: 0,
-          used: 0,
-        },
+        // キャッシュの場合は最後に取得したレート制限情報を使用
+        // 実際のレート制限情報は最新のAPIリクエストで取得されるため、
+        // キャッシュの場合は古い情報になる可能性がある
+        rateLimit: cachedData.rateLimit,
+        cacheHit: true,
       };
 
       // キャッシュヘッダーを追加
@@ -186,7 +182,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiListRes
         status: HTTP_STATUS.OK,
         headers: {
           'X-Cache': 'HIT',
-          'Cache-Control': 'private, max-age=900', // 15分
+          'Cache-Control': `private, max-age=${rateLimitMonitor.getOptimalCacheTTL()}`,
         },
       });
 
@@ -196,20 +192,18 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiListRes
     // ステップ3: GitHub APIからデータ取得
     const result = await listPullRequests(params);
 
-    // ステップ4: 結果をキャッシュ
-    cache.set(cacheKey, result);
+    const cacheTtlSeconds = rateLimitMonitor.getOptimalCacheTTL();
+
+    // ステップ4: 結果をキャッシュ（レート制限情報も含む）
+    cache.set(cacheKey, result, cacheTtlSeconds);
 
     // ステップ5: 成功レスポンスを作成
     const response: SuccessListResponse = {
       success: true,
       data: result.data,
       pagination: result.pagination,
-      rateLimit: {
-        limit: 5000,
-        remaining: 5000,
-        reset: 0,
-        used: 0,
-      },
+      rateLimit: result.rateLimit,
+      cacheHit: false,
     };
 
     // キャッシュヘッダーと共にレスポンスを返す
@@ -217,7 +211,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiListRes
       status: HTTP_STATUS.OK,
       headers: {
         'X-Cache': 'MISS',
-        'Cache-Control': 'private, max-age=900', // 15分
+        'Cache-Control': `private, max-age=${cacheTtlSeconds}`,
       },
     });
   } catch (error) {
@@ -272,52 +266,49 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiPullRe
 
     // ステップ2: キャッシュチェック
     const cacheKey = cache.getPullRequestKey(owner, repo, pull_number);
-    const cachedData = cache.get<GitHubPullRequest>(cacheKey);
+    const cachedData = cache.get<{
+      data: GitHubPullRequest;
+      rateLimit: RateLimitInfo;
+    }>(cacheKey);
 
     if (cachedData) {
       const response: SuccessPullRequestResponse = {
         success: true,
-        data: cachedData,
-        rateLimit: {
-          limit: 5000,
-          remaining: 5000,
-          reset: 0,
-          used: 0,
-        },
+        data: cachedData.data,
+        rateLimit: cachedData.rateLimit,
+        cacheHit: true,
       };
 
       return NextResponse.json(response, {
         status: HTTP_STATUS.OK,
         headers: {
           'X-Cache': 'HIT',
-          'Cache-Control': 'private, max-age=900', // 15分
+          'Cache-Control': `private, max-age=${rateLimitMonitor.getOptimalCacheTTL()}`, 
         },
       });
     }
 
     // ステップ3: GitHub APIからデータ取得
-    const pullRequest = await getPullRequest({ owner, repo, pull_number });
+    const result = await getPullRequest({ owner, repo, pull_number });
 
-    // ステップ4: 結果をキャッシュ
-    cache.set(cacheKey, pullRequest);
+    const cacheTtlSeconds = rateLimitMonitor.getOptimalCacheTTL();
+
+    // ステップ4: 結果をキャッシュ（レート制限情報も含む）
+    cache.set(cacheKey, result, cacheTtlSeconds);
 
     // ステップ5: 成功レスポンスを作成
     const response: SuccessPullRequestResponse = {
       success: true,
-      data: pullRequest,
-      rateLimit: {
-        limit: 5000,
-        remaining: 5000,
-        reset: 0,
-        used: 0,
-      },
+      data: result.data,
+      rateLimit: result.rateLimit,
+      cacheHit: false,
     };
 
     return NextResponse.json(response, {
       status: HTTP_STATUS.OK,
       headers: {
         'X-Cache': 'MISS',
-        'Cache-Control': 'private, max-age=900', // 15 minutes
+        'Cache-Control': `private, max-age=${cacheTtlSeconds}`,
       },
     });
   } catch (error) {

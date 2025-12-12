@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { listPullRequests, isApiError } from '@/lib/api-client';
 import type { ListPullRequestsQuery, RateLimitInfo } from '@/types/api';
 import type { GitHubPullRequestSimple, PaginationInfo } from '@/types/github';
@@ -19,41 +19,41 @@ import type { GitHubPullRequestSimple, PaginationInfo } from '@/types/github';
  */
 type PullRequestsState =
   | {
-      status: 'idle';
-      data: null;
-      pagination: null;
-      rateLimit: null;
-      cacheHit: null;
-      error: null;
-    }
+    status: 'idle';
+    data: null;
+    pagination: null;
+    rateLimit: null;
+    cacheHit: null;
+    error: null;
+  }
   | {
-      status: 'loading';
-      data: null;
-      pagination: null;
-      rateLimit: null;
-      cacheHit: null;
-      error: null;
-    }
+    status: 'loading';
+    data: null;
+    pagination: null;
+    rateLimit: null;
+    cacheHit: null;
+    error: null;
+  }
   | {
-      status: 'success';
-      data: GitHubPullRequestSimple[];
-      pagination: PaginationInfo;
-      rateLimit: RateLimitInfo;
-      cacheHit: boolean;
-      error: null;
-    }
+    status: 'success';
+    data: GitHubPullRequestSimple[];
+    pagination: PaginationInfo;
+    rateLimit: RateLimitInfo;
+    cacheHit: boolean;
+    error: null;
+  }
   | {
-      status: 'error';
-      data: null;
-      pagination: null;
-      rateLimit: null;
-      cacheHit: null;
-      error: {
-        code: string;
-        message: string;
-        details?: string;
-      };
+    status: 'error';
+    data: null;
+    pagination: null;
+    rateLimit: null;
+    cacheHit: null;
+    error: {
+      code: string;
+      message: string;
+      details?: string;
     };
+  };
 
 /**
  * フックのオプション設定
@@ -140,106 +140,121 @@ export function usePullRequests(
     error: null,
   });
 
-  // データ取得関数
-  const fetchData = async (retryCount = 0): Promise<void> => {
-    // ローディング状態に設定
-    setState({
-      status: 'loading',
-      data: null,
-      pagination: null,
-      rateLimit: null,
-      cacheHit: null,
-      error: null,
-    });
+  // リトライ回数をrefで保持（再帰呼び出し用）
+  const retryRef = useRef(retry);
+  // fetchDataの最新の参照を保持（再帰呼び出し用）
+  const fetchDataRef = useRef<((retryCount?: number) => Promise<void>) | null>(null);
 
-    try {
-      // API 呼び出し
-      const response = await listPullRequests(params);
+  // retryが変更されたらrefを更新
+  useEffect(() => {
+    retryRef.current = retry;
+  }, [retry]);
 
-      // レスポンスの型チェック
-      if (response.success) {
-        // キャッシュヒットかどうかを判定（実際の実装では response header から取得）
-        // ここでは簡易的に実装
-        const cacheHit = false; // TODO: response headers から取得
-
-        // 成功状態に設定
-        setState({
-          status: 'success',
-          data: response.data,
-          pagination: response.pagination,
-          rateLimit: response.rateLimit,
-          cacheHit,
-          error: null,
-        });
-      } else {
-        // エラー状態に設定
-        setState({
-          status: 'error',
-          data: null,
-          pagination: null,
-          rateLimit: null,
-          cacheHit: null,
-          error: {
-            code: response.error.code,
-            message: response.error.message,
-            details: response.error.details,
-          },
-        });
-      }
-    } catch (error) {
-      // リトライロジック
-      if (retryCount < retry) {
-        await fetchData(retryCount + 1);
-        return;
-      }
-
-      // ApiError の処理
-      if (isApiError(error)) {
-        setState({
-          status: 'error',
-          data: null,
-          pagination: null,
-          rateLimit: null,
-          cacheHit: null,
-          error: {
-            code: error.code,
-            message: error.message,
-            details: error.details,
-          },
-        });
-        return;
-      }
-
-      // その他のエラー
+  // データ取得関数（useCallbackでメモ化）
+  const fetchData = useCallback(
+    async (retryCount = 0): Promise<void> => {
+      // ローディング状態に設定
       setState({
-        status: 'error',
+        status: 'loading',
         data: null,
         pagination: null,
         rateLimit: null,
         cacheHit: null,
-        error: {
-          code: 'UNKNOWN_ERROR',
-          message: error instanceof Error ? error.message : '不明なエラーが発生しました',
-        },
+        error: null,
       });
-    }
-  };
+
+      try {
+        // API 呼び出し
+        const response = await listPullRequests(params);
+
+        // レスポンスの型チェック
+        if (response.success) {
+          // キャッシュヒットかどうかを判定（実際の実装では response header から取得）
+          const cacheHit = response.cacheHit; // TODO: response headers から取得
+
+          // 成功状態に設定
+          setState({
+            status: 'success',
+            data: response.data,
+            pagination: response.pagination,
+            rateLimit: response.rateLimit,
+            cacheHit,
+            error: null,
+          });
+        } else {
+          // エラー状態に設定
+          setState({
+            status: 'error',
+            data: null,
+            pagination: null,
+            rateLimit: null,
+            cacheHit: null,
+            error: {
+              code: response.error.code,
+              message: response.error.message,
+              details: response.error.details,
+            },
+          });
+        }
+      } catch (error) {
+        // リトライロジック（refから最新のretry値を取得）
+        if (retryCount < retryRef.current && fetchDataRef.current) {
+          await fetchDataRef.current(retryCount + 1);
+          return;
+        }
+
+        // ApiError の処理
+        if (isApiError(error)) {
+          setState({
+            status: 'error',
+            data: null,
+            pagination: null,
+            rateLimit: null,
+            cacheHit: null,
+            error: {
+              code: error.code,
+              message: error.message,
+              details: error.details,
+            },
+          });
+          return;
+        }
+
+        // その他のエラー
+        setState({
+          status: 'error',
+          data: null,
+          pagination: null,
+          rateLimit: null,
+          cacheHit: null,
+          error: {
+            code: 'UNKNOWN_ERROR',
+            message: error instanceof Error ? error.message : '不明なエラーが発生しました',
+          },
+        });
+      }
+    },
+    [params]
+  );
+
+  // fetchDataの最新の参照をrefに保存
+  useEffect(() => {
+    fetchDataRef.current = fetchData;
+  }, [fetchData]);
 
   // 初回マウント時とパラメータ変更時にデータ取得
   useEffect(() => {
     if (enabled) {
-      void fetchData();
+      return;
     }
-  }, [
-    params.owner,
-    params.repo,
-    params.state,
-    params.sort,
-    params.direction,
-    params.per_page,
-    params.page,
-    enabled,
-  ]);
+
+    // 非同期関数を定義して、setStateの呼び出しを非同期コンテキストに移動
+    const executeFetch = async (): Promise<void> => {
+      await fetchData();
+    }
+
+    void executeFetch();
+  }, [enabled, fetchData]);
 
   // 定期的な再取得
   useEffect(() => {
@@ -254,7 +269,7 @@ export function usePullRequests(
     return () => {
       clearInterval(intervalId);
     };
-  }, [refetchInterval, enabled]);
+  }, [refetchInterval, enabled, fetchData]);
 
   // 戻り値
   return {

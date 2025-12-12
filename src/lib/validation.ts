@@ -9,13 +9,13 @@ const ownerSchema = z
   .string()
   .min(1, 'オーナー名は必須です')
   .max(39, 'オーナー名が長すぎます')
-  .regex(/^[a-zA-Z0-9._-]+$/, 'オーナー名に無効な文字が含まれています');
+  .regex(/^[a-zA-Z0-9_-]+$/, 'オーナー名に無効な文字が含まれています');
 
 const repoSchema = z
   .string()
   .min(1, 'リポジトリ名は必須です')
   .max(100, 'リポジトリ名が長すぎます')
-  .regex(/^[a-zA-Z0-9._-]+$/, 'リポジトリ名に無効な文字が含まれています');
+  .regex(/^[a-zA-Z0-9_-]+$/, 'リポジトリ名に無効な文字が含まれています');
 
 const pullNumberSchema = z
   .number()

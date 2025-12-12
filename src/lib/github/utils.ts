@@ -1,4 +1,5 @@
 import type { GitHubAPIError } from '@/types/github';
+import type { RateLimitInfo } from '@/types/api';
 
 /**
  * GitHub APIエラーを詳細なエラーメッセージで処理
@@ -209,4 +210,46 @@ export function extractPageNumber(url: string | undefined): number | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * GitHub APIレスポンスヘッダーからレート制限情報を抽出
+ *
+ * @param headers - GitHub APIレスポンスのヘッダーオブジェクト
+ * @returns レート制限情報
+ */
+export function extractRateLimit(headers: {
+  [key: string]: string | number | undefined;
+}): RateLimitInfo {
+  // Octokitのレスポンスヘッダーからレート制限情報を取得
+  const limit = typeof headers['x-ratelimit-limit'] === 'string'
+    ? parseInt(headers['x-ratelimit-limit'], 10)
+    : typeof headers['x-ratelimit-limit'] === 'number'
+      ? headers['x-ratelimit-limit']
+      : 5000;
+
+  const remaining = typeof headers['x-ratelimit-remaining'] === 'string'
+    ? parseInt(headers['x-ratelimit-remaining'], 10)
+    : typeof headers['x-ratelimit-remaining'] === 'number'
+      ? headers['x-ratelimit-remaining']
+      : 5000;
+
+  const reset = typeof headers['x-ratelimit-reset'] === 'string'
+    ? parseInt(headers['x-ratelimit-reset'], 10)
+    : typeof headers['x-ratelimit-reset'] === 'number'
+      ? headers['x-ratelimit-reset']
+      : 0;
+
+  const used = typeof headers['x-ratelimit-used'] === 'string'
+    ? parseInt(headers['x-ratelimit-used'], 10)
+    : typeof headers['x-ratelimit-used'] === 'number'
+      ? headers['x-ratelimit-used']
+      : 0;
+
+  return {
+    limit,
+    remaining,
+    reset,
+    used,
+  };
 }

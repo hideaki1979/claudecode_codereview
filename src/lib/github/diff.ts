@@ -1,10 +1,17 @@
 import { getOctokit } from './client';
-import { handleGitHubError, validateRepository, validatePullNumber } from './utils';
+import { 
+  handleGitHubError, 
+  validateRepository, 
+  validatePullNumber,
+  extractRateLimit,
+} from './utils';
 import type {
   GitHubDiff,
   GitHubPullRequestFile,
   GetPullRequestDiffParams,
 } from '@/types/github';
+import type { RateLimitInfo } from '@/types/api';
+import { rateLimitMonitor } from '../rateLimit';
 
 /**
  * プルリクエストの差分を取得（変更されたファイルの一覧）
@@ -31,7 +38,7 @@ import type {
 export async function getPullRequestDiff(
   params: GetPullRequestDiffParams,
   token?: string
-): Promise<GitHubDiff> {
+): Promise<{data: GitHubDiff; rateLimit: RateLimitInfo;}> {
   try {
     const octokit = getOctokit(token);
 
@@ -43,12 +50,32 @@ export async function getPullRequestDiff(
 
     // ページネーションを使用して複数ページにわたるすべてのファイルを取得
     // これにより、100件を超える場合でもすべての変更ファイルを取得できる
-    const files = (await octokit.paginate(octokit.rest.pulls.listFiles, {
+    const iterator = octokit.paginate.iterator(octokit.rest.pulls.listFiles, {
       owner,
       repo,
       pull_number,
       per_page: 100, // 最大許容値
-    })) as GitHubPullRequestFile[];
+    });
+
+    const files: GitHubPullRequestFile[] = [];
+    let rateLimit: RateLimitInfo | null = null;
+
+    // 全ページを走査しつつ、最新のレート制限ヘッダーを保持
+    for await (const response of iterator) {
+      files.push(...(response.data as GitHubPullRequestFile[]));
+      rateLimit = extractRateLimit(response.headers as Record<string, string | number | undefined>);
+    }
+
+    // レート制限情報が取得できなかった場合のフォールバック
+    const resolveRateLimit: RateLimitInfo =
+      rateLimit ?? {
+        limit: 5000,
+        remaining: 5000,
+        reset: 0,
+        used: 0,
+      }
+    
+      rateLimitMonitor.update(resolveRateLimit);
 
     // 合計値の計算
     const total_additions = files.reduce((sum, file) => sum + file.additions, 0);
@@ -56,10 +83,13 @@ export async function getPullRequestDiff(
     const total_changes = files.reduce((sum, file) => sum + file.changes, 0);
 
     return {
-      files,
-      total_additions,
-      total_deletions,
-      total_changes,
+      data: {
+        files,
+        total_additions,
+        total_deletions,
+        total_changes,
+      },
+      rateLimit: resolveRateLimit,
     };
   } catch (error) {
     throw handleGitHubError(error, 'Failed to fetch pull request diff');
@@ -161,7 +191,7 @@ export async function getPullRequestFile(
       throw new Error('Filename is required');
     }
 
-    const diffToUse = diff || (await getPullRequestDiff(params, token));
+    const diffToUse = diff || (await getPullRequestDiff(params, token)).data;
 
     const file = diffToUse.files.find((f) => f.filename === filename);
 

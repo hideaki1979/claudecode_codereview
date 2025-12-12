@@ -61,12 +61,17 @@ class MemoryCache {
       expiresAt: now + ttl,
     };
 
-    // Implement simple LRU: remove oldest entry if cache is full
+    // Implement LRU: remove oldest entry if cache is full
     if (this.cache.size >= this.maxEntries) {
       const firstKey = this.cache.keys().next().value;
       if (firstKey) {
         this.cache.delete(firstKey);
       }
+    }
+
+    // Move accessed item to the end to mark as recently used
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
     }
 
     this.cache.set(key, entry as CacheEntry<unknown>);
