@@ -181,10 +181,32 @@ export async function getPullRequest(
 export async function getPullRequestDiffAPI(
   params: GetPullRequestDiffParams
 ): Promise<SuccessDiffResponse | ErrorResponse> {
-  return fetchAPI<SuccessDiffResponse>('/api/github/diff', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
+  try {
+    return fetchAPI<SuccessDiffResponse>('/api/github/diff', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  } catch (error) {
+    if (isApiError(error)) {
+      return {
+        success: false,
+        error: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        },
+      };
+    }
+
+    // 予期しないエラーのフォールバック
+    return {
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: error instanceof Error ? error.message : 'APIクライアントで予期しないエラーが発生しました',
+      },
+    };
+  }
 }
 
 /**

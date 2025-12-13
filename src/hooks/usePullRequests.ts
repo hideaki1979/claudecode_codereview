@@ -181,6 +181,7 @@ export function usePullRequests(
           const cacheHit = response.cacheHit; // TODO: response headers から取得
 
           // 成功状態に設定
+          // エラーはcatchブロックで処理されます。
           setState({
             status: 'success',
             data: response.data,
@@ -188,20 +189,6 @@ export function usePullRequests(
             rateLimit: response.rateLimit,
             cacheHit,
             error: null,
-          });
-        } else {
-          // エラー状態に設定
-          setState({
-            status: 'error',
-            data: null,
-            pagination: null,
-            rateLimit: null,
-            cacheHit: null,
-            error: {
-              code: response.error.code,
-              message: response.error.message,
-              details: response.error.details,
-            },
           });
         }
       } catch (error) {
