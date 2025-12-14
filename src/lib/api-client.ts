@@ -5,8 +5,6 @@
  */
 
 import type {
-  ApiListResponse,
-  ApiPullRequestResponse,
   ListPullRequestsQuery,
   GetPullRequestBody,
   ErrorResponse,
