@@ -53,7 +53,7 @@ export function handleGitHubError(error: unknown, defaultMessage: string): never
       const isRateLimit =
         rateLimitRemaing === '0' ||
         rateLimitRemaing === 0 ||
-        githubError.message?.includes('rate limit'); // フォールバック: ヘッダーが利用できない場合
+        githubError.message?.toLowerCase().includes('rate limit'); // フォールバック: ヘッダーが利用できない場合
 
       if (isRateLimit) {
         throw new RateLimitError(`${defaultMessage}: GitHub API rate limit exceeded. Please try again later.`);
@@ -385,7 +385,7 @@ export function mapErrorToResponse(error: Error): {
   return {
     code: 'INTERNAL_ERROR',
     status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-    message: error.message || '予期しないエラーが発生しました。再試行してください。',
+    message: '予期しないエラーが発生しました。再試行してください。',
   };
 }
 
