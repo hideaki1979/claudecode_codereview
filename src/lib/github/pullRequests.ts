@@ -5,7 +5,9 @@ import {
   validatePullNumber,
   validatePagination,
   parseLinkHeader,
+  extractRateLimit,
 } from './utils';
+import { rateLimitMonitor } from '../rateLimit';
 import type {
   GitHubPullRequest,
   GitHubPullRequestSimple,
@@ -13,6 +15,7 @@ import type {
   GetPullRequestParams,
   PaginationInfo,
 } from '@/types/github';
+import type { RateLimitInfo } from '@/types/api';
 
 /**
  * リポジトリのプルリクエスト一覧を取得
@@ -37,7 +40,11 @@ import type {
 export async function listPullRequests(
   params: ListPullRequestsParams,
   token?: string
-): Promise<{ data: GitHubPullRequestSimple[]; pagination: PaginationInfo }> {
+): Promise<{
+  data: GitHubPullRequestSimple[];
+  pagination: PaginationInfo;
+  rateLimit: RateLimitInfo;
+}> {
   try {
     const octokit = getOctokit(token);
 
@@ -82,9 +89,14 @@ export async function listPullRequests(
       has_prev_page: hasPrevPage, // 前のページが存在するか
     };
 
+    // レスポンスヘッダーからレート制限情報を抽出
+    const rateLimit = extractRateLimit(response.headers);
+    rateLimitMonitor.update(rateLimit);
+
     return {
       data: response.data as GitHubPullRequestSimple[],
       pagination,
+      rateLimit,
     };
   } catch (error) {
     throw handleGitHubError(error, 'Failed to fetch pull requests');
@@ -113,7 +125,10 @@ export async function listPullRequests(
 export async function getPullRequest(
   params: GetPullRequestParams,
   token?: string
-): Promise<GitHubPullRequest> {
+): Promise<{
+  data: GitHubPullRequest;
+  rateLimit: RateLimitInfo;
+}> {
   try {
     const octokit = getOctokit(token);
 
@@ -129,7 +144,14 @@ export async function getPullRequest(
       pull_number,
     });
 
-    return response.data as GitHubPullRequest;
+    // レスポンスヘッダーからレート制限情報を抽出
+    const rateLimit = extractRateLimit(response.headers);
+    rateLimitMonitor.update(rateLimit);
+
+    return {
+      data: response.data as GitHubPullRequest,
+      rateLimit,
+    }
   } catch (error) {
     throw handleGitHubError(error, 'Failed to fetch pull request');
   }

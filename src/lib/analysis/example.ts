@@ -23,7 +23,7 @@ export async function basicAnalysisExample(): Promise<void> {
 
   try {
     // ステップ1: 差分を取得
-    const diff = await getPullRequestDiff(params);
+    const { data: diff } = await getPullRequestDiff(params);
 
     // ステップ2: 分析を実行
     const result = analyzePullRequest(diff);
@@ -59,7 +59,7 @@ export async function detailedAnalysisExample(
   params: GetPullRequestParams
 ): Promise<void> {
   try {
-    const diff = await getPullRequestDiff(params);
+    const { data: diff } = await getPullRequestDiff(params);
 
     const result = analyzePullRequest(diff);
 
@@ -127,7 +127,7 @@ export async function apiRouteExample(
 ): Promise<Response> {
   try {
     // 差分を取得
-    const diff = await getPullRequestDiff({ owner, repo, pull_number });
+    const { data: diff } = await getPullRequestDiff({ owner, repo, pull_number });
 
     // 分析を実行
     const result = analyzePullRequest(diff);
@@ -172,7 +172,7 @@ export async function riskBasedActionsExample(
   params: GetPullRequestParams
 ): Promise<void> {
   try {
-    const diff = await getPullRequestDiff(params);
+    const { data: diff } = await getPullRequestDiff(params);
 
     const result = analyzePullRequest(diff);
 
@@ -233,7 +233,7 @@ export async function batchAnalysisExample(
 
   for (const pull_number of pullNumbers) {
     try {
-      const diff = await getPullRequestDiff({ owner, repo, pull_number });
+      const { data: diff } = await getPullRequestDiff({ owner, repo, pull_number });
 
       const result = analyzePullRequest(diff);
 
@@ -245,7 +245,7 @@ export async function batchAnalysisExample(
       } else {
         console.error(`PR #${pull_number}: Analysis failed - ${result.error}`);
       }
-    } catch (error){
+    } catch (error) {
       console.error(`PR #${pull_number}: Failed to fetch data`, error);
     }
   }

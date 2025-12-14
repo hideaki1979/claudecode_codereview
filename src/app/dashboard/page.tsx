@@ -1,73 +1,17 @@
 /**
  * Dashboard Page (Server Component)
  *
- * Main dashboard for displaying PR analysis results
+ * シンプルなServer Component - データ取得はClient Componentで実施
  */
 
-import { getPullRequestDiff, listPullRequests } from '@/lib/github';
-import { analyzePullRequest } from '@/lib/analysis';
 import { DashboardContent } from './DashboardContent';
-import type { PRWithAnalysis } from '@/types/dashboard';
-
-/**
- * Fetch and analyze PRs from GitHub
- */
-async function fetchPRsWithAnalysis(): Promise<PRWithAnalysis[]> {
-  try {
-    // Fetch PRs from the repository
-    // Replace with your actual repository details or make it dynamic
-    const { data: prs } = await listPullRequests({
-      owner: 'hideaki1979',
-      repo: 'ud_Laravel12_catcafe',
-      state: 'all',
-      per_page: 20,
-    });
-
-    // Analyze each PR
-    const analysisPromises = prs.map(async (pr) => {
-      try {
-        // Fetch PR diff
-        const diff = await getPullRequestDiff({
-          owner: 'hideaki1979',
-          repo: 'ud_Laravel12_catcafe',
-          pull_number: pr.number,
-        });
-
-        // Analyze the diff
-        const result = analyzePullRequest(diff);
-
-        // Return PR with analysis if successful
-        if (result.status === 'success') {
-          return {
-            pr,
-            analysis: result.data,
-          };
-        }
-
-        // Return null for failed analysis
-        return null;
-      } catch (error) {
-        console.error(`Failed to analyze PR #${pr.number}:`, error);
-        return null;
-      }
-    });
-
-    // Wait for all analyses to complete
-    const results = await Promise.all(analysisPromises);
-
-    // Filter out null results
-    return results.filter((result): result is PRWithAnalysis => result !== null);
-  } catch (error) {
-    console.error('Failed to fetch PRs:', error);
-    return [];
-  }
-}
 
 /**
  * Dashboard Page Component
+ *
+ * Client Component にデータ取得とレンダリングを委譲
  */
-export default async function DashboardPage(): Promise<React.JSX.Element> {
-  const data = await fetchPRsWithAnalysis();
+export default function DashboardPage(): React.JSX.Element {
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -93,7 +37,7 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <DashboardContent initialData={data} />
+        <DashboardContent owner="hideaki1979" repo="ud_Laravel12_catcafe" />
       </main>
 
       {/* Footer */}
