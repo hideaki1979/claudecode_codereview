@@ -53,7 +53,7 @@ class MemoryCache {
    */
   set<T>(key: string, data: T, customTtl?: number): void {
     const now = Date.now();
-    const ttl = customTtl ? customTtl * 1000 : this.ttl;
+    const ttl = customTtl !== undefined ? customTtl * 1000 : this.ttl;
 
     const entry: CacheEntry<T> = {
       data,

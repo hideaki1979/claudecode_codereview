@@ -135,6 +135,10 @@ npm run build
 - リポジトリのオーナー/名前を確認
 - トークンにリポジトリアクセス権があるか確認
 
+### 認証エラー（401 Unauthorized）
+- APIキーが設定されているか確認（`.env.local`に`API_KEY`と`NEXT_PUBLIC_API_KEY`を設定）
+- サーバーサイドとクライアントサイドの環境変数が正しく設定されているか確認
+
 ### TypeScriptエラー
 ```bash
 rm -rf node_modules
@@ -151,8 +155,20 @@ npm run dev
 
 ### リポジトリのカスタマイズ
 1. `page.tsx`のリポジトリ設定を更新
-2. `.env.local`に`GITHUB_TOKEN`を設定
+2. `.env.local`に以下の環境変数を設定:
+   ```bash
+   # GitHub API用のトークン
+   GITHUB_TOKEN="your_github_token_here"
+   
+   # API認証用のキー（サーバーサイド）
+   API_KEY="your_api_key_here"
+   
+   # API認証用のキー（クライアントサイド、NEXT_PUBLIC_プレフィックスが必要）
+   NEXT_PUBLIC_API_KEY="your_api_key_here"
+   ```
 3. 開発サーバーを再起動
+
+**注意**: 開発環境では`API_KEY`を設定しない場合、認証がスキップされます（本番環境では警告が表示されます）。
 
 ### フィルターの追加
 1. `FilterOptions`型にフィールドを追加

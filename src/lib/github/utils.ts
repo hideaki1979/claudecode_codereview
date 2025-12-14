@@ -12,6 +12,18 @@ import {
 } from './error';
 
 /**
+ * Octokitのエラーオブジェクトの型定義
+ * @octokit/request-error のエラーオブジェクトには response.headers が含まれる
+ */
+interface OctokitErrorWithResponse extends Error {
+  response?: {
+    headers?: {
+      [key: string]: string | number | undefined;
+    };
+  };
+}
+
+/**
  * GitHub APIエラーを適切なカスタムエラークラスに変換
  *
  * @param error - GitHub APIからのエラー
@@ -34,7 +46,15 @@ export function handleGitHubError(error: unknown, defaultMessage: string): never
     }
 
     if (githubError.status === 403) {
-      const isRateLimit = githubError.message?.includes('rate limit');
+      // より堅牢な方法: レスポンスヘッダーからレート制限を検出
+      // @octokit/request-error のエラーオブジェクトには response.headers が含まれる
+      const octokitError = githubError as GitHubAPIError & Error & OctokitErrorWithResponse;
+      const rateLimitRemaing = octokitError.response?.headers?.['x-ratelimit-remaining'];
+      const isRateLimit =
+        rateLimitRemaing === '0' ||
+        rateLimitRemaing === 0 ||
+        githubError.message?.includes('rate limit'); // フォールバック: ヘッダーが利用できない場合
+
       if (isRateLimit) {
         throw new RateLimitError(`${defaultMessage}: GitHub API rate limit exceeded. Please try again later.`);
       }
@@ -54,7 +74,8 @@ export function handleGitHubError(error: unknown, defaultMessage: string): never
     }
 
     // 利用可能な場合は元のエラーメッセージを含む内部エラーをスロー
-    throw new InternalError(`${defaultMessage}: ${error.message}`);
+    console.error(`${defaultMessage}:`, error); // サーバーサイドで詳細なエラーをログに記録
+    throw new InternalError(defaultMessage);
   }
 
   throw new InternalError(defaultMessage);
@@ -304,6 +325,14 @@ export function mapErrorToResponse(error: Error): {
   }
 
   if (error instanceof UnauthorizedError) {
+    return {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof ForbiddenError) {
     return {
       code: error.code,
       status: error.status,

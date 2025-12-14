@@ -153,15 +153,15 @@ interface ErrorResponse {
 
 ### Error Codes
 
-| Code                | HTTP Status | Description                                                                                                 |
-| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
-| VALIDATION_ERROR    | 400         | Invalid request parameters                                                                                  |
-| UNAUTHORIZED        | 401         | Missing or invalid GitHub token (includes invalid token format, missing token, and authentication failures) |
-| FORBIDDEN           | 403         | Insufficient permissions                                                                                    |
-| NOT_FOUND           | 404         | Repository or PR not found                                                                                  |
-| RATE_LIMIT_EXCEEDED | 429         | GitHub API rate limit exceeded                                                                              |
-| INTERNAL_ERROR      | 500         | Unexpected server error                                                                                     |
-| GITHUB_API_ERROR    | 500         | GitHub API returned an error                                                                                |
+| Code                | HTTP Status | Description                                                                                                                             |
+| ------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| VALIDATION_ERROR    | 400         | Invalid request parameters                                                                                                              |
+| UNAUTHORIZED        | 401         | Missing or invalid API key, or missing/invalid GitHub token (includes invalid token format, missing token, and authentication failures) |
+| FORBIDDEN           | 403         | Insufficient permissions                                                                                                                |
+| NOT_FOUND           | 404         | Repository or PR not found                                                                                                              |
+| RATE_LIMIT_EXCEEDED | 429         | GitHub API rate limit exceeded                                                                                                          |
+| INTERNAL_ERROR      | 500         | Unexpected server error                                                                                                                 |
+| GITHUB_API_ERROR    | 500         | GitHub API returned an error                                                                                                            |
 
 ### Example Error Response
 
@@ -287,13 +287,55 @@ export default function PullRequestList() {
 }
 ```
 
-## Configuration
+## Authentication
 
-Set the GitHub token in `.env.local`:
+All API endpoints require authentication using an API key. You can provide the API key in two ways:
+
+1. **Authorization Header** (recommended):
+
+   ```bash
+   Authorization: Bearer <API_KEY>
+   ```
+
+2. **X-API-Key Header**:
+   ```bash
+   X-API-Key: <API_KEY>
+   ```
+
+### Example Request with Authentication
 
 ```bash
-GITHUB_TOKEN=ghp_your_token_here
+curl -X POST http://localhost:3000/api/github \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_api_key_here" \
+  -d '{
+    "owner": "facebook",
+    "repo": "react",
+    "pull_number": 42
+  }'
 ```
+
+### Development vs Production
+
+- **Development**: If `API_KEY` is not set, authentication is skipped (with a warning in production)
+- **Production**: `API_KEY` must be set for security
+
+## Configuration
+
+Set the following environment variables in `.env.local`:
+
+```bash
+# GitHub API token
+GITHUB_TOKEN=ghp_your_token_here
+
+# API authentication key (server-side)
+API_KEY=your_api_key_here
+
+# API authentication key (client-side, requires NEXT_PUBLIC_ prefix)
+NEXT_PUBLIC_API_KEY=your_api_key_here
+```
+
+**Note**: The client-side API key (`NEXT_PUBLIC_API_KEY`) is exposed to the browser. In production, consider using a more secure authentication method like NextAuth.js.
 
 ## Performance Considerations
 
@@ -304,7 +346,10 @@ GITHUB_TOKEN=ghp_your_token_here
 
 ## Security
 
-1. **Token Management**: GitHub token stored in environment variables
-2. **Validation**: All inputs validated with Zod schemas
-3. **Error Sanitization**: Internal errors not exposed to clients
-4. **No Token Exposure**: Token never included in responses
+1. **API Authentication**: All endpoints require API key authentication
+2. **Token Management**: GitHub token stored in environment variables
+3. **Validation**: All inputs validated with Zod schemas
+4. **Error Sanitization**: Internal errors not exposed to clients
+5. **No Token Exposure**: Tokens never included in responses
+6. **Timing Attack Protection**: Constant-time comparison for API key validation
+7. **Development Mode**: Authentication can be disabled in development (not recommended for production)

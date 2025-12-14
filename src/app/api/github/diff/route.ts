@@ -118,7 +118,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       message,
       code,
       status,
-      error instanceof Error ? error.message : undefined
+      process.env.NODE_ENV !== 'production' && error instanceof Error ? error.message : undefined,
     );
   }
 }

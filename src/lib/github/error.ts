@@ -94,8 +94,9 @@ export class InternalError extends GitHubError {
 export class GitHubAPIError extends GitHubError {
     constructor(
         message: string,
-        originalStatus: number = HTTP_STATUS.INTERNAL_SERVER_ERROR
+        status: number = HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        originalStatus: number = status
     ) {
-        super(message, 'GITHUB_API_ERROR', HTTP_STATUS.INTERNAL_SERVER_ERROR, originalStatus);
+        super(message, 'GITHUB_API_ERROR', status, originalStatus);
     }
 }
