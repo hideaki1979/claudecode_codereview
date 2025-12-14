@@ -1,5 +1,6 @@
 import type { GitHubAPIError } from '@/types/github';
-import type { RateLimitInfo } from '@/types/api';
+import { HTTP_STATUS, type ErrorCode, type ErrorResponse, type RateLimitInfo } from '@/types/api';
+import { NextResponse } from 'next/server';
 
 /**
  * GitHub APIエラーを詳細なエラーメッセージで処理
@@ -253,3 +254,101 @@ export function extractRateLimit(headers: {
     used,
   };
 }
+
+/**
+ * 標準化されたエラーレスポンスを作成
+ */
+export function createErrorResponse(
+  message: string,
+  code: ErrorCode,
+  status: number,
+  details?: string
+): NextResponse<ErrorResponse> {
+  const errorResponse: ErrorResponse = {
+    success: false,
+    error: {
+      message,
+      code,
+      details,
+    },
+  };
+
+  return NextResponse.json(errorResponse, { status });
+}
+
+/**
+ * エラーを適切なエラーコードとステータスにマッピング
+ */
+export function mapErrorToResponse(error: Error): {
+  code: ErrorCode;
+  status: number;
+  message: string;
+} {
+  const errorMessage = error.message.toLowerCase();
+
+  // レート制限エラー
+  if (errorMessage.includes('rate limit')) {
+    return {
+      code: 'RATE_LIMIT_EXCEEDED',
+      status: HTTP_STATUS.TOO_MANY_REQUESTS,
+      message: 'GitHub APIのレート制限に達しました。しばらく待ってから再試行してください。',
+    };
+  }
+
+  // 認証エラー
+  if (errorMessage.includes('unauthorized')) {
+    return {
+      code: 'UNAUTHORIZED',
+      status: HTTP_STATUS.UNAUTHORIZED,
+      message: 'GitHubトークンが無効または不足しています。認証情報を確認してください。',
+    };
+  }
+
+  // 認証エラー
+  if (errorMessage.includes('token')) {
+    return {
+      code: 'UNAUTHORIZED',
+      status: HTTP_STATUS.UNAUTHORIZED,
+      message: 'GitHubトークンが無効または不足しています。認証情報を確認してください。',
+    };
+  }
+
+  // 権限エラー
+  if (errorMessage.includes('forbidden') || errorMessage.includes('insufficient permissions')) {
+    return {
+      code: 'FORBIDDEN',
+      status: HTTP_STATUS.FORBIDDEN,
+      message: '権限が不足しています。トークンのスコープを確認してください。',
+    };
+  }
+
+  // Not foundエラー
+  if (errorMessage.includes('not found')) {
+    return {
+      code: 'NOT_FOUND',
+      status: HTTP_STATUS.NOT_FOUND,
+      message: 'リポジトリまたはプルリクエストが見つかりません。',
+    };
+  }
+
+  // バリデーションエラー
+  if (
+    errorMessage.includes('invalid') ||
+    errorMessage.includes('required') ||
+    errorMessage.includes('must be')
+  ) {
+    return {
+      code: 'VALIDATION_ERROR',
+      status: HTTP_STATUS.BAD_REQUEST,
+      message: error.message,
+    };
+  }
+
+  // デフォルトは内部エラー
+  return {
+    code: 'INTERNAL_ERROR',
+    status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: '予期しないエラーが発生しました。再試行してください。',
+  };
+}
+

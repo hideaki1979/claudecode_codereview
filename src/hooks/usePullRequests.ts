@@ -178,7 +178,7 @@ export function usePullRequests(
         // レスポンスの型チェック
         if (response.success) {
           // キャッシュヒットかどうかを判定（実際の実装では response header から取得）
-          const cacheHit = response.cacheHit; // TODO: response headers から取得
+          const cacheHit = response.cacheHit;
 
           // 成功状態に設定
           // エラーはcatchブロックで処理されます。

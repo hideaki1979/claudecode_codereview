@@ -9,7 +9,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { usePullRequests } from '@/hooks/usePullRequests';
-import { getPullRequestDiffAPI } from '@/lib/api-client';
+import { getPullRequestDiffAPI, isApiError } from '@/lib/api-client';
 import { analyzePullRequest } from '@/lib/analysis';
 import { PRCard } from '@/components/PRCard';
 import { AnalysisChart } from '@/components/AnalysisChart';
@@ -92,12 +92,6 @@ export function DashboardContent({
                 pull_number: pr.number,
               });
 
-              // エラーレスポンスの場合はスキップ
-              if (!diffResponse.success) {
-                console.error(`PR #${pr.number} の差分取得に失敗:`, diffResponse.error);
-                return null;
-              }
-
               const diff = diffResponse.data;
 
               // 差分を分析
@@ -113,7 +107,15 @@ export function DashboardContent({
 
               return null;
             } catch (error) {
-              console.error(`PR #${pr.number} の分析に失敗:`, error);
+              // ApiErrorの場合は詳細をログ出力
+              if (isApiError(error)) {
+                console.error(
+                  `PR #${pr.number} の差分取得に失敗: [${error.code}] ${error.message}`,
+                  error.details ? `詳細: ${error.details}` : ''
+                );
+              } else {
+                console.error(`PR #${pr.number} の分析に失敗:`, error);
+              }
               return null;
             }
           })

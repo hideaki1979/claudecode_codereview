@@ -11,6 +11,9 @@ import type {
   GetPullRequestBody,
   ErrorResponse,
   SuccessDiffResponse,
+  ErrorCode,
+  SuccessListResponse,
+  SuccessPullRequestResponse,
 } from '@/types/api';
 import type { GetPullRequestDiffParams } from '@/types/github';
 
@@ -21,7 +24,7 @@ import type { GetPullRequestDiffParams } from '@/types/github';
  */
 export class ApiError extends Error {
   constructor(
-    public code: ErrorResponse['error']['code'],
+    public code: ErrorCode,
     message: string,
     public details?: string
   ) {
@@ -109,7 +112,7 @@ async function fetchAPI<T>(
  */
 export async function listPullRequests(
   params: ListPullRequestsQuery
-): Promise<ApiListResponse> {
+): Promise<SuccessListResponse> {
   // クエリパラメータを URLSearchParams に変換
   const searchParams = new URLSearchParams();
 
@@ -121,7 +124,7 @@ export async function listPullRequests(
 
   const url = `/api/github?${searchParams.toString()}`;
 
-  return fetchAPI<ApiListResponse>(url, {
+  return fetchAPI<SuccessListResponse>(url, {
     method: 'GET',
   });
 }
@@ -150,8 +153,8 @@ export async function listPullRequests(
  */
 export async function getPullRequest(
   body: GetPullRequestBody
-): Promise<ApiPullRequestResponse> {
-  return fetchAPI<ApiPullRequestResponse>('/api/github', {
+): Promise<SuccessPullRequestResponse> {
+  return fetchAPI<SuccessPullRequestResponse>('/api/github', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -166,47 +169,28 @@ export async function getPullRequest(
  *
  * @example
  * ```ts
- * const response = await getPullRequestDiffAPI({
- *   owner: 'octocat',
- *   repo: 'hello-world',
- *   pull_number: 1,
- * });
- *
- * if (response.success) {
+ * try {
+ *   const response = await getPullRequestDiffAPI({
+ *     owner: 'octocat',
+ *     repo: 'hello-world',
+ *     pull_number: 1,
+ *   });
  *   console.log(response.data.files); // 変更されたファイル一覧
  *   console.log(response.data.total_changes); // 変更行数の合計
+ * } catch (error) {
+ *   if (isApiError(error)) {
+ *     console.error(error.code, error.message);
+ *   }
  * }
  * ```
  */
 export async function getPullRequestDiffAPI(
   params: GetPullRequestDiffParams
-): Promise<SuccessDiffResponse | ErrorResponse> {
-  try {
-    return fetchAPI<SuccessDiffResponse>('/api/github/diff', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  } catch (error) {
-    if (isApiError(error)) {
-      return {
-        success: false,
-        error: {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-        },
-      };
-    }
-
-    // 予期しないエラーのフォールバック
-    return {
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: error instanceof Error ? error.message : 'APIクライアントで予期しないエラーが発生しました',
-      },
-    };
-  }
+): Promise<SuccessDiffResponse> {
+  return fetchAPI<SuccessDiffResponse>('/api/github/diff', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
 }
 
 /**
