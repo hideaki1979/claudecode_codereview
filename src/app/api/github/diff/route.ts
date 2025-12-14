@@ -61,7 +61,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     };
 
     // ステップ3: キャッシュチェック
-    const cacheKey = cache.getPullRequestKey(owner, repo, pull_number);
+    const cacheKey = cache.getPullRequestDiffKey(owner, repo, pull_number);
     const cachedData = cache.get<{
       data: GitHubDiff;
       rateLimit: RateLimitInfo;

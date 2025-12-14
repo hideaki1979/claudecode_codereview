@@ -92,6 +92,13 @@ class MemoryCache {
   }
 
   /**
+   * Generate and return cache key for pull request diff
+   */
+  getPullRequestDiffKey(owner: string, repo: string, pullNumber: number): string {
+    return this.generateKey('pr:diff', { owner, repo, pull_number: pullNumber });
+  }
+
+  /**
    * Clear specific cache entry
    */
   delete(key: string): boolean {

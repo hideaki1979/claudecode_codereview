@@ -1,25 +1,34 @@
 import type { GitHubAPIError } from '@/types/github';
 import { HTTP_STATUS, type ErrorCode, type ErrorResponse, type RateLimitInfo } from '@/types/api';
 import { NextResponse } from 'next/server';
+import {
+  ForbiddenError,
+  NotFoundError,
+  RateLimitError,
+  UnauthorizedError,
+  ValidationError,
+  GitHubAPIError as CustomGitHubAPIError,
+  InternalError,
+} from './error';
 
 /**
- * GitHub APIエラーを詳細なエラーメッセージで処理
+ * GitHub APIエラーを適切なカスタムエラークラスに変換
  *
  * @param error - GitHub APIからのエラー
  * @param defaultMessage - デフォルトのエラーメッセージ
- * @returns コンテキストを含むフォーマット済みエラー
+ * @throws 適切なカスタムエラークラス
  */
-export function handleGitHubError(error: unknown, defaultMessage: string): Error {
+export function handleGitHubError(error: unknown, defaultMessage: string): never {
   if (error instanceof Error) {
     // ステータスコードを含むGitHub APIエラーかチェック
     const githubError = error as GitHubAPIError & Error;
 
     if (githubError.status === 404) {
-      return new Error(`${defaultMessage}: Resource not found`);
+      throw new NotFoundError(`${defaultMessage}: Resource not found`);
     }
 
     if (githubError.status === 401) {
-      return new Error(
+      throw new UnauthorizedError(
         `${defaultMessage}: Unauthorized. Check your GitHub token or ensure it has the required scopes.`
       );
     }
@@ -27,28 +36,28 @@ export function handleGitHubError(error: unknown, defaultMessage: string): Error
     if (githubError.status === 403) {
       const isRateLimit = githubError.message?.includes('rate limit');
       if (isRateLimit) {
-        return new Error(`${defaultMessage}: GitHub API rate limit exceeded. Please try again later.`);
+        throw new RateLimitError(`${defaultMessage}: GitHub API rate limit exceeded. Please try again later.`);
       }
-      return new Error(`${defaultMessage}: Forbidden. Insufficient permissions or token scopes.`);
+      throw new ForbiddenError(`${defaultMessage}: Forbidden. Insufficient permissions or token scopes.`);
     }
 
     if (githubError.status === 422) {
-      return new Error(`${defaultMessage}: Invalid parameters provided. ${githubError.message || ''}`);
+      throw new ValidationError(`${defaultMessage}: Invalid parameters provided. ${githubError.message || ''}`);
     }
 
     if (githubError.status === 500) {
-      return new Error(`${defaultMessage}: GitHub server error. Please try again later.`);
+      throw new CustomGitHubAPIError(`${defaultMessage}: GitHub server error. Please try again later.`, 500);
     }
 
     if (githubError.status === 503) {
-      return new Error(`${defaultMessage}: GitHub service unavailable. Please try again later.`);
+      throw new CustomGitHubAPIError(`${defaultMessage}: GitHub service unavailable. Please try again later.`, 503);
     }
 
-    // 利用可能な場合は元のエラーメッセージを返す
-    return new Error(`${defaultMessage}: ${error.message}`);
+    // 利用可能な場合は元のエラーメッセージを含む内部エラーをスロー
+    throw new InternalError(`${defaultMessage}: ${error.message}`);
   }
 
-  return new Error(defaultMessage);
+  throw new InternalError(defaultMessage);
 }
 
 /**
@@ -62,21 +71,21 @@ export function handleGitHubError(error: unknown, defaultMessage: string): Error
 // リポジトリのオーナー名とリポジトリ名が正しい形式かチェックします。
 export function validateRepository(owner: string, repo: string): void {
   if (!owner || typeof owner !== 'string' || owner.trim() === '') {
-    throw new Error('Repository owner is required and must be a non-empty string');
+    throw new ValidationError('Repository owner is required and must be a non-empty string');
   }
 
   if (!repo || typeof repo !== 'string' || repo.trim() === '') {
-    throw new Error('Repository name is required and must be a non-empty string');
+    throw new ValidationError('Repository name is required and must be a non-empty string');
   }
 
   // 無効な文字をチェック
   const validPattern = /^[a-zA-Z0-9._-]+$/;
   if (!validPattern.test(owner)) {
-    throw new Error('Repository owner contains invalid characters');
+    throw new ValidationError('Repository owner contains invalid characters');
   }
 
   if (!validPattern.test(repo)) {
-    throw new Error('Repository name contains invalid characters');
+    throw new ValidationError('Repository name contains invalid characters');
   }
 }
 
@@ -90,11 +99,11 @@ export function validateRepository(owner: string, repo: string): void {
 // プルリクエスト番号が正しい形式かチェックします。
 export function validatePullNumber(pull_number: number): void {
   if (!pull_number || typeof pull_number !== 'number') {
-    throw new Error('Pull request number is required and must be a number');
+    throw new ValidationError('Pull request number is required and must be a number');
   }
 
   if (pull_number < 1 || !Number.isInteger(pull_number)) {
-    throw new Error('Pull request number must be a positive integer');
+    throw new ValidationError('Pull request number must be a positive integer');
   }
 }
 
@@ -110,21 +119,21 @@ export function validatePullNumber(pull_number: number): void {
 export function validatePagination(per_page?: number, page?: number): void {
   if (per_page !== undefined) {
     if (typeof per_page !== 'number' || !Number.isInteger(per_page)) {
-      throw new Error('per_page must be an integer');
+      throw new ValidationError('per_page must be an integer');
     }
 
     if (per_page < 1 || per_page > 100) {
-      throw new Error('per_page must be between 1 and 100');
+      throw new ValidationError('per_page must be between 1 and 100');
     }
   }
 
   if (page !== undefined) {
     if (typeof page !== 'number' || !Number.isInteger(page)) {
-      throw new Error('page must be an integer');
+      throw new ValidationError('page must be an integer');
     }
 
     if (page < 1) {
-      throw new Error('page must be greater than 0');
+      throw new ValidationError('page must be greater than 0');
     }
   }
 }
@@ -139,7 +148,7 @@ export function validatePagination(per_page?: number, page?: number): void {
 // GitHubトークンが正しい形式かチェックします。
 export function validateToken(token: string | undefined): void {
   if (!token || typeof token !== 'string' || token.trim() === '') {
-    throw new Error(
+    throw new ValidationError(
       'GitHub token is required. Provide it as an argument or set GITHUB_TOKEN environment variable.'
     );
   }
@@ -278,77 +287,76 @@ export function createErrorResponse(
 
 /**
  * エラーを適切なエラーコードとステータスにマッピング
+ * カスタムエラークラスのinstanceofチェックを使用して、文字列マッチングの脆弱性を回避
  */
 export function mapErrorToResponse(error: Error): {
   code: ErrorCode;
   status: number;
   message: string;
 } {
-  const errorMessage = error.message.toLowerCase();
-
-  // レート制限エラー
-  if (errorMessage.includes('rate limit')) {
+  // カスタムエラークラスの場合は、そのプロパティを直接使用
+  if (error instanceof NotFoundError) {
     return {
-      code: 'RATE_LIMIT_EXCEEDED',
-      status: HTTP_STATUS.TOO_MANY_REQUESTS,
-      message: 'GitHub APIのレート制限に達しました。しばらく待ってから再試行してください。',
-    };
-  }
-
-  // 認証エラー
-  if (errorMessage.includes('unauthorized')) {
-    return {
-      code: 'UNAUTHORIZED',
-      status: HTTP_STATUS.UNAUTHORIZED,
-      message: 'GitHubトークンが無効または不足しています。認証情報を確認してください。',
-    };
-  }
-
-  // 認証エラー
-  if (errorMessage.includes('token')) {
-    return {
-      code: 'UNAUTHORIZED',
-      status: HTTP_STATUS.UNAUTHORIZED,
-      message: 'GitHubトークンが無効または不足しています。認証情報を確認してください。',
-    };
-  }
-
-  // 権限エラー
-  if (errorMessage.includes('forbidden') || errorMessage.includes('insufficient permissions')) {
-    return {
-      code: 'FORBIDDEN',
-      status: HTTP_STATUS.FORBIDDEN,
-      message: '権限が不足しています。トークンのスコープを確認してください。',
-    };
-  }
-
-  // Not foundエラー
-  if (errorMessage.includes('not found')) {
-    return {
-      code: 'NOT_FOUND',
-      status: HTTP_STATUS.NOT_FOUND,
-      message: 'リポジトリまたはプルリクエストが見つかりません。',
-    };
-  }
-
-  // バリデーションエラー
-  if (
-    errorMessage.includes('invalid') ||
-    errorMessage.includes('required') ||
-    errorMessage.includes('must be')
-  ) {
-    return {
-      code: 'VALIDATION_ERROR',
-      status: HTTP_STATUS.BAD_REQUEST,
+      code: error.code,
+      status: error.status,
       message: error.message,
     };
   }
 
-  // デフォルトは内部エラー
+  if (error instanceof UnauthorizedError) {
+    return {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof RateLimitError) {
+    return {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof ValidationError) {
+    return {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof CustomGitHubAPIError) {
+    return {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof InternalError) {
+    return {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    };
+  }
+
+  // GitHubErrorの基底クラスの場合（将来の拡張用）
+  if (error instanceof Error && 'code' in error && 'status' in error) {
+    const githubError = error as { code: ErrorCode; status: number; message: string };
+    return {
+      code: githubError.code,
+      status: githubError.status,
+      message: githubError.message,
+    };
+  }
+  // デフォルトは内部エラー（通常のErrorオブジェクトの場合）
   return {
     code: 'INTERNAL_ERROR',
     status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-    message: '予期しないエラーが発生しました。再試行してください。',
+    message: error.message || '予期しないエラーが発生しました。再試行してください。',
   };
 }
 
