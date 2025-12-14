@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { RepositorySelector } from '@/components/RepositorySelector';
 import { DashboardContent } from './DashboardContent';
 
@@ -17,10 +17,15 @@ interface RepositoryInfo {
 
 export function DashboardPageWrapper(): React.JSX.Element {
   const [repository, setRepository] = useState<RepositoryInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleRepositorySubmit = (owner: string, repo: string): void => {
     setRepository({ owner, repo });
   };
+
+  const handleLoadingChange = useCallback((loading: boolean): void => {
+    setIsLoading(loading);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -28,12 +33,16 @@ export function DashboardPageWrapper(): React.JSX.Element {
       <RepositorySelector
         onSubmit={handleRepositorySubmit}
         defaultValues={repository || undefined}
-        isLoading={false}
+        isLoading={isLoading}
       />
 
       {/* ダッシュボードコンテンツ */}
       {repository ? (
-        <DashboardContent owner={repository.owner} repo={repository.repo} />
+        <DashboardContent
+          owner={repository.owner}
+          repo={repository.repo}
+          onLoadingChange={handleLoadingChange}
+        />
       ) : (
         <div className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-12 text-center">
           <svg

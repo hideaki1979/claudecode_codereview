@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,7 +20,11 @@ const repositorySchema = z.object({
   repo: z
     .string()
     .min(1, 'リポジトリ名を入力してください')
-    .regex(/^[a-z0-9_.-]+$/i, 'リポジトリ名の形式が正しくありません'),
+    .regex(/^[a-z0-9_.-]+$/i, 'リポジトリ名の形式が正しくありません')
+    .refine(name => !name.endsWith('.git'), 'リポジトリ名は.gitで終了することはできません')
+    .refine(name => name != '.' && name !== '..', 'リポジトリ名として.と..は使用できません')
+  ,
+
 });
 
 type RepositoryFormData = z.infer<typeof repositorySchema>;
@@ -45,6 +49,7 @@ export function RepositorySelector({
     register,
     handleSubmit,
     formState: { errors, isValid },
+    reset,
   } = useForm<RepositoryFormData>({
     resolver: zodResolver(repositorySchema),
     mode: 'onChange',
@@ -53,6 +58,10 @@ export function RepositorySelector({
       repo: '',
     },
   });
+
+  useEffect(() => {
+    reset(defaultValues);
+  }, [defaultValues, reset]);
 
   const handleFormSubmit = (data: RepositoryFormData): void => {
     onSubmit(data.owner, data.repo);

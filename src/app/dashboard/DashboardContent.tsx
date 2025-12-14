@@ -31,6 +31,12 @@ interface DashboardContentProps {
    * GitHubリポジトリ名
    */
   repo: string;
+
+  /**
+   * ローディング状態の変化を通知するコールバック
+   * PR一覧取得中または分析中の場合はtrueを渡す
+   */
+  onLoadingChange?: (isLoading: boolean) => void;
 }
 
 /**
@@ -41,6 +47,7 @@ interface DashboardContentProps {
 export function DashboardContent({
   owner,
   repo,
+  onLoadingChange,
 }: DashboardContentProps): React.JSX.Element | null {
   const [filters, setFilters] = useState<FilterOptions>({});
   const [analyzedData, setAnalyzedData] = useState<PRWithAnalysis[]>([]);
@@ -61,6 +68,12 @@ export function DashboardContent({
   const prData = useMemo(() => {
     return prState.status === 'success' ? prState.data : null;
   }, [prState.status, prState.data]);
+
+  // ローディング状態の変化を親コンポーネントに通知
+  useEffect(() => {
+    const isCurrentlyLoading = isLoading || isAnalyzing;
+    onLoadingChange?.(isCurrentlyLoading);
+  }, [isLoading, isAnalyzing, onLoadingChange]);
 
   // プルリクエストを取得したら分析を実行
   useEffect(() => {
