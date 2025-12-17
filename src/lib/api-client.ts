@@ -15,6 +15,11 @@ import type {
 } from '@/types/api';
 import type { GetPullRequestDiffParams } from '@/types/github';
 
+// fetchオプションを型定義に追加
+interface FetchOptions {
+  signal?: AbortSignal;
+}
+
 /**
  * API エラークラス
  *
@@ -73,6 +78,11 @@ async function fetchAPI<T>(
   } catch (error) {
     // ApiError はそのまま再スロー
     if (error instanceof ApiError) {
+      throw error;
+    }
+
+    // AbortError は変換せずにそのまま再スロー（キャンセル処理のため）
+    if (error instanceof Error && error.name === 'AbortError') {
       throw error;
     }
 
@@ -183,11 +193,13 @@ export async function getPullRequest(
  * ```
  */
 export async function getPullRequestDiffAPI(
-  params: GetPullRequestDiffParams
+  params: GetPullRequestDiffParams,
+  options?: FetchOptions
 ): Promise<SuccessDiffResponse> {
   return fetchAPI<SuccessDiffResponse>('/api/github/diff', {
     method: 'POST',
     body: JSON.stringify(params),
+    signal: options?.signal,
   });
 }
 
