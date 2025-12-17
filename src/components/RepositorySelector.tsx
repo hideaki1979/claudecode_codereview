@@ -23,8 +23,6 @@ const repositorySchema = z.object({
     .regex(/^[a-z0-9_.-]+$/i, 'リポジトリ名の形式が正しくありません')
     .refine(name => !name.endsWith('.git'), 'リポジトリ名は.gitで終了することはできません')
     .refine(name => name != '.' && name !== '..', 'リポジトリ名として.と..は使用できません')
-  ,
-
 });
 
 type RepositoryFormData = z.infer<typeof repositorySchema>;

@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { usePullRequests } from '@/hooks/usePullRequests';
 import { getPullRequestDiffAPI, isApiError } from '@/lib/api-client';
 import { analyzePullRequest } from '@/lib/analysis';
@@ -70,10 +70,16 @@ export function DashboardContent({
   }, [prState.status, prState.data]);
 
   // ローディング状態の変化を親コンポーネントに通知
+  // onLoadingChangeをrefで保持し、依存配列から除外してReactの警告を回避
+  const onLoadingChangeRef = useRef(onLoadingChange);
+  useEffect(() => {
+    onLoadingChangeRef.current = onLoadingChange;
+  }, [onLoadingChange]);
+
   useEffect(() => {
     const isCurrentlyLoading = isLoading || isAnalyzing;
-    onLoadingChange?.(isCurrentlyLoading);
-  }, [isLoading, isAnalyzing, onLoadingChange]);
+    onLoadingChangeRef.current?.(isCurrentlyLoading);
+  }, [isLoading, isAnalyzing]);
 
   // プルリクエストを取得したら分析を実行
   useEffect(() => {
@@ -90,6 +96,9 @@ export function DashboardContent({
       return;
     }
 
+    // AbortControllerを使用して、レポジトリ変更時に非同期処理をキャンセル
+    let isCancelled = false;
+
     // 分析処理
     const analyzeAllPRs = async (): Promise<void> => {
       setIsAnalyzing(true);
@@ -97,6 +106,11 @@ export function DashboardContent({
       try {
         const results = await Promise.all(
           pullRequests.map(async (pr: GitHubPullRequestSimple) => {
+            // キャンセルされた場合は処理をスキップ
+            if (isCancelled) {
+              return null;
+            }
+
             try {
               // PR の差分を取得（APIルート経由）
               const diffResponse = await getPullRequestDiffAPI({
@@ -104,6 +118,11 @@ export function DashboardContent({
                 repo,
                 pull_number: pr.number,
               });
+
+              // キャンセルされた場合は結果を破棄
+              if (isCancelled) {
+                return null;
+              }
 
               const diff = diffResponse.data;
 
@@ -120,6 +139,11 @@ export function DashboardContent({
 
               return null;
             } catch (error) {
+              // キャンセルされた場合はエラーをログ出力しない
+              if (isCancelled) {
+                return null;
+              }
+
               // ApiErrorの場合は詳細をログ出力
               if (isApiError(error)) {
                 console.error(
@@ -134,19 +158,36 @@ export function DashboardContent({
           })
         );
 
+        // キャンセルされた場合は結果を設定しない
+        if (isCancelled) {
+          return;
+        }
+
         // null を除外して結果を設定
         const validResults = results.filter(
           (result): result is PRWithAnalysis => result !== null
         );
         setAnalyzedData(validResults);
       } catch (error) {
-        console.error('PR分析中にエラーが発生:', error);
+        // キャンセルされた場合はエラーをログ出力しない
+        if (!isCancelled) {
+          console.error('PR分析中にエラーが発生:', error);
+        }
       } finally {
-        setIsAnalyzing(false);
+        // キャンセルされた場合でもisAnalyzingをfalseに設定
+        if (!isCancelled) {
+          setIsAnalyzing(false);
+        }
       }
     };
 
     void analyzeAllPRs();
+
+    // クリーンアップ関数: レポジトリが変更された際に実行
+    return () => {
+      isCancelled = true;
+      setIsAnalyzing(false);
+    };
   }, [hasData, prStatus, prData, owner, repo]);
 
   // PR データをフィルタリング
