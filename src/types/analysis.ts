@@ -2,8 +2,10 @@
  * Pull Request Analysis Types
  *
  * このファイルは、GitHub Pull Requestの分析結果を表す型定義を提供します。
- * 複雑度、影響範囲、リスク評価の3つの主要な分析軸に基づいています。
+ * 複雑度、影響範囲、リスク評価、セキュリティの4つの主要な分析軸に基づいています。
  */
+
+import type { SecurityMetrics } from '@/lib/analysis/security';
 
 /**
  * 複雑度メトリクス
@@ -86,9 +88,14 @@ export interface AnalysisData {
   impact: ImpactMetrics;
   /** リスク評価 */
   risk: RiskAssessment;
+  /** セキュリティメトリクス */
+  security: SecurityMetrics;
   /** 分析実行日時（ISO 8601形式） */
   analyzed_at: string;
 }
+
+// 再エクスポート
+export type { SecurityMetrics } from '@/lib/analysis/security';
 
 /**
  * 分析結果（Discriminated Union パターン）

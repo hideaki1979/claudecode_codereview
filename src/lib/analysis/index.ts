@@ -3,6 +3,7 @@ import type { AnalysisData, AnalysisResult } from '@/types/analysis';
 import { calculateComplexity } from './complexity';
 import { analyzeImpact } from './impact';
 import { calculateRisk } from './risk';
+import { analyzeSecurity, createEmptySecurityMetrics } from './security';
 
 /**
  * Pull Requestの差分を包括的に分析
@@ -103,6 +104,7 @@ function createEmptyAnalysisData(): AnalysisData {
       },
       recommendations: [],
     },
+    security: createEmptySecurityMetrics(),
     analyzed_at: new Date().toISOString(),
   }
 }
@@ -137,6 +139,9 @@ export function analyzePullRequest(diff: GitHubDiff): AnalysisResult {
     // 3.3: リスクの評価（複雑度と影響範囲を組み合わせる）
     const risk = calculateRisk(complexity, impact);
 
+    // 3.4: セキュリティスキャン
+    const security = analyzeSecurity(diff);
+
     // ステップ4: 成功結果の返却
     return {
       status: 'success',
@@ -144,6 +149,7 @@ export function analyzePullRequest(diff: GitHubDiff): AnalysisResult {
         complexity,
         impact,
         risk,
+        security,
         analyzed_at: new Date().toISOString(),
       },
     };
@@ -161,3 +167,5 @@ export function analyzePullRequest(diff: GitHubDiff): AnalysisResult {
 export { calculateComplexity } from './complexity';
 export { analyzeImpact } from './impact';
 export { calculateRisk } from './risk';
+export { analyzeSecurity, createEmptySecurityMetrics } from './security';
+export type { SecurityMetrics, SecurityIssue, SecuritySeverity } from './security';
