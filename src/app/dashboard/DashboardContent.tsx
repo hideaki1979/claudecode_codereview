@@ -158,10 +158,8 @@ export function DashboardContent({
         // それ以外のエラーはログ出力
         console.error('PR分析中にErrorが発生：', error);
       } finally {
-        // キャンセルされた場合でもisAnalyzingをfalseに設定
-        if (!signal.aborted) {
-          setIsAnalyzing(false);
-        }
+        // 処理が完了・失敗・キャンセルされた場合、すべてリセット
+        setIsAnalyzing(false);
       }
     };
 
