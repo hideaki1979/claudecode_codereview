@@ -4,7 +4,7 @@
  * セキュリティスキャン結果を表示するコンポーネント
  */
 
-import { Shield, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
+import { Info, Shield, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 import type { SecurityMetrics } from '@/lib/analysis/security';
 
 interface SecurityBadgeProps {
@@ -90,7 +90,7 @@ export function SecurityBadge({ security, showDetails = false }: SecurityBadgePr
           )}
           {security.low_count > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
-              <Shield className="h-3 w-3" />
+              <Info className="h-3 w-3" />
               {security.low_count}
             </span>
           )}
