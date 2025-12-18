@@ -170,3 +170,29 @@ export function SecurityBadgeCompact({ security }: { security: SecurityMetrics }
     </div>
   );
 }
+
+/**
+ * Security Level Badge for footer display
+ */
+export type SecurityLevel = 'safe' | 'warning' | 'danger' | 'critical';
+
+interface SecurityLevelBadgeProps {
+  level: SecurityLevel;
+}
+
+export function SecurityLevelBadge({ level }: SecurityLevelBadgeProps): React.JSX.Element {
+  const config = {
+    safe: { bg: 'bg-green-100', text: 'text-green-700', label: 'SAFE' },
+    warning: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'WARNING' },
+    danger: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'DANGER' },
+    critical: { bg: 'bg-red-100', text: 'text-red-700', label: 'CRITICAL' },
+  };
+
+  const { bg, text, label } = config[level];
+
+  return (
+    <span className={`rounded-full ${bg} px-2 py-1 ${text}`}>
+      {label}
+    </span>
+  );
+}

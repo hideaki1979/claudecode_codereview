@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import type { PRWithAnalysis, RiskLevel } from '@/types/dashboard';
 import { ja } from 'date-fns/locale';
-import { SecurityBadge } from './SecurityBadge';
+import { SecurityBadge, SecurityLevelBadge } from './SecurityBadge';
 
 interface PRCardProps {
   data: PRWithAnalysis;
@@ -208,26 +208,5 @@ function MetricItem({ label, value, suffix = '' }: MetricItemProps): React.JSX.E
         {suffix && <span className="text-sm text-gray-500">{suffix}</span>}
       </div>
     </div>
-  );
-}
-
-interface SecurityLevelBadgeProps {
-  level: 'safe' | 'warning' | 'danger' | 'critical';
-}
-
-function SecurityLevelBadge({ level }: SecurityLevelBadgeProps): React.JSX.Element {
-  const config = {
-    safe: { bg: 'bg-green-100', text: 'text-green-700', label: 'SAFE' },
-    warning: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'WARNING' },
-    danger: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'DANGER' },
-    critical: { bg: 'bg-red-100', text: 'text-red-700', label: 'CRITICAL' },
-  };
-
-  const { bg, text, label } = config[level];
-
-  return (
-    <span className={`rounded-full ${bg} px-2 py-1 ${text}`}>
-      {label}
-    </span>
   );
 }
