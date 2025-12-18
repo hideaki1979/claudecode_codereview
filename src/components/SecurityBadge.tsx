@@ -104,8 +104,8 @@ export function SecurityBadge({ security, showDetails = false }: SecurityBadgePr
             検出されたセキュリティ問題
           </h4>
           <ul className="space-y-2">
-            {security.issues.slice(0, 5).map((issue, idx) => (
-              <li key={idx} className="text-sm">
+            {security.issues.slice(0, 5).map((issue) => (
+              <li key={`${issue.file}:${issue.line}:${issue.type}`} className="text-sm">
                 <div className="flex items-start gap-2">
                   <SeverityIndicator severity={issue.severity} />
                   <div>
