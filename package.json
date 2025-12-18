@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
     "@octokit/rest": "^22.0.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.556.0",

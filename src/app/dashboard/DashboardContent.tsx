@@ -7,9 +7,9 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { usePullRequests } from '@/hooks/usePullRequests';
-import { getPullRequestDiffAPI, isApiError } from '@/lib/api-client';
+import { getPullRequestDiffAPI } from '@/lib/api-client';
 import { analyzePullRequest } from '@/lib/analysis';
 import { PRCard } from '@/components/PRCard';
 import { AnalysisChart } from '@/components/AnalysisChart';
@@ -31,6 +31,12 @@ interface DashboardContentProps {
    * GitHubリポジトリ名
    */
   repo: string;
+
+  /**
+   * ローディング状態の変化を通知するコールバック
+   * PR一覧取得中または分析中の場合はtrueを渡す
+   */
+  onLoadingChange?: (isLoading: boolean) => void;
 }
 
 /**
@@ -41,6 +47,7 @@ interface DashboardContentProps {
 export function DashboardContent({
   owner,
   repo,
+  onLoadingChange,
 }: DashboardContentProps): React.JSX.Element | null {
   const [filters, setFilters] = useState<FilterOptions>({});
   const [analyzedData, setAnalyzedData] = useState<PRWithAnalysis[]>([]);
@@ -62,6 +69,18 @@ export function DashboardContent({
     return prState.status === 'success' ? prState.data : null;
   }, [prState.status, prState.data]);
 
+  // ローディング状態の変化を親コンポーネントに通知
+  // onLoadingChangeをrefで保持し、依存配列から除外してReactの警告を回避
+  const onLoadingChangeRef = useRef(onLoadingChange);
+  useEffect(() => {
+    onLoadingChangeRef.current = onLoadingChange;
+  }, [onLoadingChange]);
+
+  useEffect(() => {
+    const isCurrentlyLoading = isLoading || isAnalyzing;
+    onLoadingChangeRef.current?.(isCurrentlyLoading);
+  }, [isLoading, isAnalyzing]);
+
   // プルリクエストを取得したら分析を実行
   useEffect(() => {
     // データが取得できていない場合はスキップ
@@ -77,6 +96,10 @@ export function DashboardContent({
       return;
     }
 
+    // AbortControllerを使用して、レポジトリ変更時に非同期処理をキャンセル
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     // 分析処理
     const analyzeAllPRs = async (): Promise<void> => {
       setIsAnalyzing(true);
@@ -90,7 +113,7 @@ export function DashboardContent({
                 owner,
                 repo,
                 pull_number: pr.number,
-              });
+              }, { signal });
 
               const diff = diffResponse.data;
 
@@ -104,22 +127,22 @@ export function DashboardContent({
                   analysis: result.data,
                 } as PRWithAnalysis;
               }
-
               return null;
             } catch (error) {
-              // ApiErrorの場合は詳細をログ出力
-              if (isApiError(error)) {
-                console.error(
-                  `PR #${pr.number} の差分取得に失敗: [${error.code}] ${error.message}`,
-                  error.details ? `詳細: ${error.details}` : ''
-                );
-              } else {
-                console.error(`PR #${pr.number} の分析に失敗:`, error);
+              // AbortErrorの場合は、キャンセル処理なので再スロー
+              if (error instanceof Error && error.name === 'AbortError') {
+                throw error;
               }
+              // それ以外のエラーはログ出力して、nullを返す（他のPRの処理は継続）
+              console.error(`PR #${pr.number} の分析に失敗:`, error);
               return null;
             }
           })
         );
+
+        if (signal.aborted) {
+          return;
+        }
 
         // null を除外して結果を設定
         const validResults = results.filter(
@@ -127,13 +150,26 @@ export function DashboardContent({
         );
         setAnalyzedData(validResults);
       } catch (error) {
-        console.error('PR分析中にエラーが発生:', error);
+        // AbortErrorの場合は、キャンセル処理なのでログ出力やエラーハンドリングは行わない
+        if (error instanceof Error && error.name === 'AbortError') {
+          // キャンセル時は何もしない
+          return;
+        }
+        // それ以外のエラーはログ出力
+        console.error('PR分析中にErrorが発生：', error);
       } finally {
+        // 処理が完了・失敗・キャンセルされた場合、すべてリセット
         setIsAnalyzing(false);
       }
     };
 
     void analyzeAllPRs();
+
+    // クリーンアップ関数: レポジトリが変更された際に実行
+    return () => {
+      controller.abort();
+      setIsAnalyzing(false);
+    };
   }, [hasData, prStatus, prData, owner, repo]);
 
   // PR データをフィルタリング

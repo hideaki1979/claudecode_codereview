@@ -1,18 +1,17 @@
 /**
  * Dashboard Page (Server Component)
  *
- * シンプルなServer Component - データ取得はClient Componentで実施
+ * シンプルなServer Component - データ取得とレポジトリ選択はClient Componentで実施
  */
 
-import { DashboardContent } from './DashboardContent';
+import { DashboardPageWrapper } from './DashboardPageWrapper';
 
 /**
  * Dashboard Page Component
  *
- * Client Component にデータ取得とレンダリングを委譲
+ * Client Component にレポジトリ選択とデータ取得を委譲
  */
 export default function DashboardPage(): React.JSX.Element {
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -37,7 +36,7 @@ export default function DashboardPage(): React.JSX.Element {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <DashboardContent owner="hideaki1979" repo="ud_Laravel12_catcafe" />
+        <DashboardPageWrapper />
       </main>
 
       {/* Footer */}
