@@ -265,31 +265,27 @@ export function analyzeSecurity(diff: GitHubDiff): SecurityMetrics {
 
     // 追加行のみを抽出
     const addedLines = extractAddedLines(patch);
-    const addedContent = addedLines.map((l) => l.content).join('\n');
 
-    // 全パターンをチェック
-    for (const [, patterns] of Object.entries(SECURITY_PATTERNS)) {
-      for (const patternDef of patterns) {
-        // パターンをリセット（グローバルフラグのため）
-        patternDef.pattern.lastIndex = 0;
+    // 全パターンを1行ずつチェック
+    for (const lineInfo of addedLines) {
+      const { content, lineNumber } = lineInfo;
+      for (const [, patterns] of Object.entries(SECURITY_PATTERNS)) {
+        for (const patternDef of patterns) {
+          // パターンをリセット（グローバルフラグのため）
+          patternDef.pattern.lastIndex = 0;
 
-        const matches = addedContent.matchAll(patternDef.pattern);
+          const matches = content.matchAll(patternDef.pattern);
 
-        for (const match of matches) {
-          // マッチした箇所の行番号を推定
-          const matchIndex = match.index ?? 0;
-          const contentBeforeMatch = addedContent.substring(0, matchIndex);
-          const linesBefore = contentBeforeMatch.split('\n').length;
-          const lineInfo = addedLines[linesBefore - 1];
-
-          issues.push({
-            type: patternDef.name,
-            severity: patternDef.severity,
-            message: patternDef.message,
-            file: filename,
-            line: lineInfo?.lineNumber,
-            snippet: match[0].substring(0, 100),
-          });
+          for (const match of matches) {
+            issues.push({
+              type: patternDef.name,
+              severity: patternDef.severity,
+              message: patternDef.message,
+              file: filename,
+              line: lineNumber,
+              snippet: match[0].substring(0, 100),
+            });
+          }
         }
       }
     }
