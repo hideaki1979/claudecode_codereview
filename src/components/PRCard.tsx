@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { PRWithAnalysis, RiskLevel } from '@/types/dashboard';
 import { ja } from 'date-fns/locale';
+import { SecurityBadge, SecurityLevelBadge } from './SecurityBadge';
 
 interface PRCardProps {
   data: PRWithAnalysis;
@@ -117,7 +118,7 @@ export function PRCard({ data }: PRCardProps): React.JSX.Element {
       </div>
 
       {/* Metrics Grid */}
-      <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <MetricItem
           label="リスクスコア"
           value={analysis.risk.risk_score}
@@ -129,6 +130,11 @@ export function PRCard({ data }: PRCardProps): React.JSX.Element {
           suffix="/100"
         />
         <MetricItem
+          label="セキュリティ"
+          value={analysis.security.security_score}
+          suffix="/100"
+        />
+        <MetricItem
           label="変更ファイル"
           value={analysis.complexity.files_changed}
         />
@@ -137,6 +143,13 @@ export function PRCard({ data }: PRCardProps): React.JSX.Element {
           value={analysis.complexity.lines_changed}
         />
       </div>
+
+      {/* Security Issues */}
+      {analysis.security.issue_count > 0 && (
+        <div className="mb-4">
+          <SecurityBadge security={analysis.security} showDetails={true} />
+        </div>
+      )}
 
       {/* Recommendations */}
       {analysis.risk.recommendations.length > 0 && (
@@ -164,6 +177,7 @@ export function PRCard({ data }: PRCardProps): React.JSX.Element {
           <span className="rounded-full bg-purple-100 px-2 py-1 text-purple-700">
             {analysis.impact.impact_level.toUpperCase()}
           </span>
+          <SecurityLevelBadge level={analysis.security.security_level} />
         </div>
         <Link
           href={pr.html_url}
