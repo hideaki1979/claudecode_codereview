@@ -1,0 +1,273 @@
+#!/usr/bin/env node
+
+/**
+ * GitHub Actions用: PR分析とラベル自動付与スクリプト
+ *
+ * 環境変数:
+ * - GITHUB_TOKEN: GitHub API認証トークン
+ * - PR_NUMBER: プルリクエスト番号
+ * - REPO_OWNER: リポジトリオーナー
+ * - REPO_NAME: リポジトリ名
+ */
+
+const { Octokit } = require('@octokit/rest');
+const fs = require('fs');
+const path = require('path');
+
+// 環境変数チェック
+const {
+  GITHUB_TOKEN,
+  PR_NUMBER,
+  REPO_OWNER,
+  REPO_NAME,
+} = process.env;
+
+if (!GITHUB_TOKEN || !PR_NUMBER || !REPO_OWNER || !REPO_NAME) {
+  console.error('❌ 必要な環境変数が設定されていません');
+  process.exit(1);
+}
+
+// Octokitクライアント初期化
+const octokit = new Octokit({
+  auth: GITHUB_TOKEN,
+});
+
+/**
+ * ラベル定義
+ */
+const LABELS = {
+  risk: {
+    low: { name: 'low-risk', color: '0E8A16', description: '🟢 リスクレベル: 低' },
+    medium: { name: 'medium-risk', color: 'FBCA04', description: '🟡 リスクレベル: 中' },
+    high: { name: 'high-risk', color: 'D93F0B', description: '🔴 リスクレベル: 高' },
+    critical: { name: 'critical-risk', color: 'B60205', description: '🚨 リスクレベル: 緊急' },
+  },
+  features: {
+    largeChanges: { name: 'large-changes', color: '5319E7', description: '📊 大規模な変更' },
+    criticalFiles: { name: 'critical-files-modified', color: 'D93F0B', description: '⚠️ クリティカルファイル変更' },
+    securityReview: { name: 'security-review-needed', color: 'B60205', description: '🔒 セキュリティレビュー要' },
+  },
+};
+
+/**
+ * リポジトリにラベルを作成（存在しない場合）
+ */
+async function ensureLabelsExist() {
+  console.log('📋 ラベルの確認と作成...');
+
+  const allLabels = [
+    ...Object.values(LABELS.risk),
+    ...Object.values(LABELS.features),
+  ];
+
+  for (const label of allLabels) {
+    try {
+      // ラベルが存在するか確認
+      await octokit.rest.issues.getLabel({
+        owner: REPO_OWNER,
+        repo: REPO_NAME,
+        name: label.name,
+      });
+      console.log(`  ✓ ラベル "${label.name}" は既に存在します`);
+    } catch (error) {
+      if (error.status === 404) {
+        // ラベルが存在しないので作成
+        await octokit.rest.issues.createLabel({
+          owner: REPO_OWNER,
+          repo: REPO_NAME,
+          name: label.name,
+          color: label.color,
+          description: label.description,
+        });
+        console.log(`  ✓ ラベル "${label.name}" を作成しました`);
+      } else {
+        console.error(`  ✗ ラベル "${label.name}" の確認中にエラー:`, error.message);
+      }
+    }
+  }
+}
+
+/**
+ * PR差分を取得
+ */
+async function getPullRequestDiff() {
+  console.log(`\n🔍 PR #${PR_NUMBER} の差分を取得中...`);
+
+  const { data: files } = await octokit.rest.pulls.listFiles({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    pull_number: parseInt(PR_NUMBER, 10),
+  });
+
+  console.log(`  ✓ ${files.length} ファイルの変更を検出`);
+
+  return {
+    files: files.map(file => ({
+      filename: file.filename,
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      changes: file.changes,
+      patch: file.patch || '',
+    })),
+  };
+}
+
+/**
+ * 簡易版の分析ロジック（本番では src/lib/analysis を使用）
+ */
+function analyzeSimplified(diff) {
+  const totalAdditions = diff.files.reduce((sum, f) => sum + f.additions, 0);
+  const totalDeletions = diff.files.reduce((sum, f) => sum + f.deletions, 0);
+  const linesChanged = totalAdditions + totalDeletions;
+  const filesChanged = diff.files.length;
+
+  // 複雑度計算
+  const complexityScore = Math.min(
+    100,
+    Math.floor((linesChanged / 10 + filesChanged * 5) * 0.5)
+  );
+
+  let complexityLevel = 'low';
+  if (complexityScore >= 70) complexityLevel = 'high';
+  else if (complexityScore >= 40) complexityLevel = 'medium';
+
+  // クリティカルファイル検出
+  const criticalPatterns = [
+    'package.json',
+    'package-lock.json',
+    '.env',
+    'next.config',
+    'tsconfig.json',
+  ];
+  const criticalFiles = diff.files.filter(f =>
+    criticalPatterns.some(pattern => f.filename.includes(pattern))
+  ).map(f => f.filename);
+
+  // リスク評価
+  let riskScore = complexityScore;
+  let riskLevel = 'low';
+
+  if (criticalFiles.length > 0) riskScore += 20;
+  if (linesChanged > 500) riskScore += 15;
+  if (filesChanged > 20) riskScore += 10;
+
+  riskScore = Math.min(100, riskScore);
+
+  if (riskScore >= 70) riskLevel = 'high';
+  else if (riskScore >= 50) riskLevel = 'medium';
+
+  // 推奨事項
+  const recommendations = [];
+  if (linesChanged > 500) {
+    recommendations.push('大規模な変更が含まれています。可能であればPRを分割してください。');
+  }
+  if (criticalFiles.length > 0) {
+    recommendations.push(`クリティカルファイルが変更されています: ${criticalFiles.join(', ')}`);
+  }
+  if (filesChanged > 20) {
+    recommendations.push('多数のファイルが変更されています。慎重にレビューしてください。');
+  }
+
+  return {
+    complexity: {
+      lines_changed: linesChanged,
+      files_changed: filesChanged,
+      complexity_score: complexityScore,
+      complexity_level: complexityLevel,
+    },
+    impact: {
+      critical_files: criticalFiles,
+      affected_directories: [...new Set(diff.files.map(f => path.dirname(f.filename)))],
+    },
+    risk: {
+      risk_score: riskScore,
+      risk_level: riskLevel,
+      recommendations,
+    },
+  };
+}
+
+/**
+ * PRにラベルを付与
+ */
+async function applyLabels(analysis) {
+  console.log('\n🏷️  ラベルを適用中...');
+
+  const labelsToApply = [];
+
+  // リスクレベルラベル
+  const riskLabel = LABELS.risk[analysis.risk.risk_level];
+  if (riskLabel) {
+    labelsToApply.push(riskLabel.name);
+    console.log(`  ✓ リスクレベル: ${riskLabel.description}`);
+  }
+
+  // 大規模変更ラベル
+  if (analysis.complexity.lines_changed > 500) {
+    labelsToApply.push(LABELS.features.largeChanges.name);
+    console.log(`  ✓ ${LABELS.features.largeChanges.description}`);
+  }
+
+  // クリティカルファイル変更ラベル
+  if (analysis.impact.critical_files.length > 0) {
+    labelsToApply.push(LABELS.features.criticalFiles.name);
+    console.log(`  ✓ ${LABELS.features.criticalFiles.description}`);
+  }
+
+  // ラベル付与
+  await octokit.rest.issues.addLabels({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    issue_number: parseInt(PR_NUMBER, 10),
+    labels: labelsToApply,
+  });
+
+  console.log(`\n✅ ${labelsToApply.length} 個のラベルを適用しました`);
+}
+
+/**
+ * メイン処理
+ */
+async function main() {
+  try {
+    console.log('🚀 PR分析・ラベル付与を開始します\n');
+    console.log(`リポジトリ: ${REPO_OWNER}/${REPO_NAME}`);
+    console.log(`PR番号: #${PR_NUMBER}\n`);
+
+    // ステップ1: ラベルの確認と作成
+    await ensureLabelsExist();
+
+    // ステップ2: PR差分取得
+    const diff = await getPullRequestDiff();
+
+    // ステップ3: 分析実行
+    console.log('\n📊 PR分析を実行中...');
+    const analysis = analyzeSimplified(diff);
+
+    console.log('\n分析結果:');
+    console.log(`  - 複雑度: ${analysis.complexity.complexity_score}/100 (${analysis.complexity.complexity_level})`);
+    console.log(`  - リスク: ${analysis.risk.risk_score}/100 (${analysis.risk.risk_level})`);
+    console.log(`  - 変更行数: ${analysis.complexity.lines_changed}`);
+    console.log(`  - 変更ファイル数: ${analysis.complexity.files_changed}`);
+
+    // ステップ4: ラベル付与
+    await applyLabels(analysis);
+
+    // ステップ5: 結果をファイルに保存（コメント用）
+    const resultPath = path.join(process.cwd(), '.github', 'analysis-result.json');
+    fs.writeFileSync(resultPath, JSON.stringify(analysis, null, 2));
+    console.log(`\n💾 分析結果を保存: ${resultPath}`);
+
+    console.log('\n🎉 完了しました！');
+  } catch (error) {
+    console.error('\n❌ エラーが発生しました:', error.message);
+    if (error.response) {
+      console.error('レスポンス:', error.response.data);
+    }
+    process.exit(1);
+  }
+}
+
+// 実行
+main();
