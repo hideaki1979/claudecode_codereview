@@ -38,7 +38,7 @@ GitHub Actionsがラベルを付与できるように、リポジトリ設定を
 
 以下のファイルがリポジトリに含まれていることを確認:
 
-```
+```text
 .github/
 ├── workflows/
 │   └── pr-analysis.yml       # ワークフロー定義
