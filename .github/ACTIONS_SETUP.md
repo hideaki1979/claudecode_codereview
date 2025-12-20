@@ -1,11 +1,12 @@
-# GitHub Actions自動ラベル付与の設定ガイド
+# GitHub Actions 自動ラベル付与の設定ガイド
 
-このドキュメントでは、PR分析と自動ラベル付与のGitHub Actionsを設定する手順を説明します。
+このドキュメントでは、PR 分析と自動ラベル付与の GitHub Actions を設定する手順を説明します。
 
 ## 📋 機能概要
 
-PRが作成・更新されるたびに自動的に:
-- PR差分を分析
+PR が作成・更新されるたびに自動的に:
+
+- PR 差分を分析
 - リスクレベルを評価
 - 適切なラベルを自動付与
 - 分析結果をコメントで通知
@@ -13,21 +14,23 @@ PRが作成・更新されるたびに自動的に:
 ## 🏷️ 自動付与されるラベル
 
 ### リスクレベル
+
 - 🟢 `low-risk` - リスクレベル: 低
 - 🟡 `medium-risk` - リスクレベル: 中
 - 🔴 `high-risk` - リスクレベル: 高
 - 🚨 `critical-risk` - リスクレベル: 緊急
 
 ### 特徴フラグ
-- 📊 `large-changes` - 500行以上の大規模変更
-- ⚠️ `critical-files-modified` - package.json, .envなどの重要ファイル変更
+
+- 📊 `large-changes` - 500 行以上の大規模変更
+- ⚠️ `critical-files-modified` - `package.json`, `.env` などの設定ファイル変更（詳細はスクリプトを参照）
 - 🔒 `security-review-needed` - セキュリティレビュー推奨（将来実装）
 
 ## 🚀 セットアップ手順
 
 ### 1. リポジトリ権限の確認
 
-GitHub Actionsがラベルを付与できるように、リポジトリ設定を確認します。
+GitHub Actions がラベルを付与できるように、リポジトリ設定を確認します。
 
 1. リポジトリの **Settings** → **Actions** → **General** を開く
 2. **Workflow permissions** セクションで以下を確認:
@@ -47,7 +50,7 @@ GitHub Actionsがラベルを付与できるように、リポジトリ設定を
 └── ACTIONS_SETUP.md          # このファイル
 ```
 
-これらのファイルをmainブランチにプッシュします:
+これらのファイルを main ブランチにプッシュします:
 
 ```bash
 git add .github/
@@ -57,14 +60,16 @@ git push origin main
 
 ### 3. 動作確認
 
-テスト用のPRを作成して動作を確認:
+テスト用の PR を作成して動作を確認:
 
 1. 新しいブランチを作成
+
    ```bash
    git checkout -b test/auto-labeling
    ```
 
 2. 何かファイルを変更
+
    ```bash
    echo "# Test" >> test.md
    git add test.md
@@ -72,11 +77,11 @@ git push origin main
    git push origin test/auto-labeling
    ```
 
-3. GitHubでPRを作成
+3. GitHub で PR を作成
 
 4. **Actions** タブで "PR Analysis & Auto Labeling" ワークフローの実行を確認
 
-5. PRページでラベルが自動付与されているか確認
+5. PR ページでラベルが自動付与されているか確認
 
 6. 分析結果のコメントが投稿されているか確認
 
@@ -94,9 +99,9 @@ const LABELS = {
   features: {
     // 新しいラベルを追加
     customLabel: {
-      name: 'custom-label',
-      color: '0052CC',
-      description: 'カスタムラベル'
+      name: "custom-label",
+      color: "0052CC",
+      description: "カスタムラベル",
     },
   },
 };
@@ -123,9 +128,11 @@ on:
 ### ラベルが付与されない
 
 1. **権限を確認**:
+
    - Settings → Actions → General → Workflow permissions が "Read and write permissions" になっているか
 
 2. **ワークフローの実行ログを確認**:
+
    - Actions タブで該当のワークフロー実行を開く
    - エラーメッセージを確認
 
@@ -153,5 +160,5 @@ on:
 - [ ] セキュリティ脆弱性スキャンの統合
 - [ ] テストカバレッジの評価
 - [ ] AI（Claude/GPT-4）によるコードレビュー提案
-- [ ] Slack/Discord通知
+- [ ] Slack/Discord 通知
 - [ ] 分析結果のトレンド追跡

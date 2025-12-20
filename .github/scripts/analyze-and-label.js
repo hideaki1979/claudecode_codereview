@@ -37,17 +37,20 @@ const ANALYSIS_CONFIG = {
     LARGE_CHANGES: 15,
     MANY_FILES: 10,
   },
-  CRITICAL_PATTERNS: [
+  CRITICAL_PATTERNS_EXACT: [
     'package.json',
     'package-lock.json',
+    'tsconfig.json',
+  ],
+  CRITICAL_PATTERNS_PREFIX: [
     '.env',
     'next.config',
-    'tsconfig.json',
   ],
   CONSTANTS: {
     MAX_SCORE: 100,
     PARSE_INT_RADIX: 10,
     HTTP_STATUS_NOT_FOUND: 404,
+    HTTP_STATUS_UNPROCESSABLE_CONTENT: 422,
     JSON_INDENT: 2,
     EXIT_CODE_ERROR: 1,
   },
@@ -61,8 +64,16 @@ const {
   REPO_NAME,
 } = process.env;
 
+// PR_NUMBERを数値にパースし、NaNチェック
+const PARSED_PR_NUMBER = parseInt(PR_NUMBER, ANALYSIS_CONFIG.CONSTANTS.PARSE_INT_RADIX)
+
 if (!GITHUB_TOKEN || !PR_NUMBER || !REPO_OWNER || !REPO_NAME) {
   console.error('❌ 必要な環境変数が設定されていません');
+  process.exit(ANALYSIS_CONFIG.CONSTANTS.EXIT_CODE_ERROR);
+}
+
+if (isNaN(PARSED_PR_NUMBER)) {
+  console.error(`❌ PR_NUMBER が不正な数値です: ${PR_NUMBER}`);
   process.exit(ANALYSIS_CONFIG.CONSTANTS.EXIT_CODE_ERROR);
 }
 
@@ -94,32 +105,47 @@ const LABELS = {
 async function ensureLabelsExist() {
   console.log('📋 ラベルの確認と作成...');
 
-  const allLabels = [
+  const allDefinedLabels = [
     ...Object.values(LABELS.risk),
     ...Object.values(LABELS.features),
   ];
 
+  const { data: existingLabels } = await octokit.rest.issues.listLabelsForRepo({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+  });
+
+  const existingLabelNames = new Set(existingLabels.map(l => l.name));
+
+  const labelsToCreate = allDefinedLabels.filter(label => !existingLabelNames.has(label.name));
+
+  allDefinedLabels.forEach(label => {
+    if (existingLabelNames.has(label.name)) {
+      console.log(`  ✓ ラベル "${label.name}" は既に存在します`);
+    }
+  });
+
+  if (labelsToCreate.length === 0) {
+    return;
+  }
+
   await Promise.all(
-    allLabels.map(async (label) => {
+    labelsToCreate.map(async (label) => {
       try {
         // ラベルが存在するか確認
-        await octokit.rest.issues.getLabel({
+        await octokit.rest.issues.createLabel({
           owner: REPO_OWNER,
           repo: REPO_NAME,
           name: label.name,
+          color: label.color,
+          description: label.description,
         });
-        console.log(`  ✓ ラベル "${label.name}" は既に存在します`);
+        console.log(`  ✓ ラベル "${label.name}" を作成しました。`);
       } catch (error) {
-        if (error.status === ANALYSIS_CONFIG.CONSTANTS.HTTP_STATUS_NOT_FOUND) {
-          // ラベルが存在しないので作成
-          await octokit.rest.issues.createLabel({
-            owner: REPO_OWNER,
-            repo: REPO_NAME,
-            name: label.name,
-            color: label.color,
-            description: label.description,
-          });
-          console.log(`  ✓ ラベル "${label.name}" を作成しました`);
+        if (error.status === ANALYSIS_CONFIG.CONSTANTS.HTTP_STATUS_UNPROCESSABLE_CONTENT &&
+          error.message.includes('already exists')
+        ) {
+          console.log(`  - ラベル "${label.name}" は既に存在します (競合)`);
         } else {
           console.error(`  ✗ ラベル "${label.name}" の確認中にエラー:`, error.message);
         }
@@ -137,7 +163,7 @@ async function getPullRequestDiff() {
   const { data: files } = await octokit.rest.pulls.listFiles({
     owner: REPO_OWNER,
     repo: REPO_NAME,
-    pull_number: parseInt(PR_NUMBER, ANALYSIS_CONFIG.CONSTANTS.PARSE_INT_RADIX),
+    pull_number: PARSED_PR_NUMBER,
   });
 
   console.log(`  ✓ ${files.length} ファイルの変更を検出`);
@@ -174,9 +200,12 @@ function analyzeSimplified(diff) {
   else if (complexityScore >= ANALYSIS_CONFIG.THRESHOLDS.COMPLEXITY_MEDIUM) complexityLevel = 'medium';
 
   // クリティカルファイル検出
-  const criticalPatterns = ANALYSIS_CONFIG.CRITICAL_PATTERNS;
-  const criticalFiles = diff.files.filter(f =>
-    criticalPatterns.some(pattern => path.basename(f.filename).startsWith(pattern))
+  const criticalFiles = diff.files.filter(f => {
+    const base = path.basename(f.filename);
+    const isExactMatch = ANALYSIS_CONFIG.CRITICAL_PATTERNS_EXACT.includes(base);
+    const isPrefixMatch = ANALYSIS_CONFIG.CRITICAL_PATTERNS_PREFIX.some(p => base.startsWith(p));
+    return isExactMatch || isPrefixMatch;
+  }
   ).map(f => f.filename);
 
   // リスク評価
@@ -254,7 +283,7 @@ async function applyLabels(analysis) {
   await octokit.rest.issues.addLabels({
     owner: REPO_OWNER,
     repo: REPO_NAME,
-    issue_number: parseInt(PR_NUMBER, ANALYSIS_CONFIG.CONSTANTS.PARSE_INT_RADIX),
+    issue_number: PARSED_PR_NUMBER,
     labels: labelsToApply,
   });
 
