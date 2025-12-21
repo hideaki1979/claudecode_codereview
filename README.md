@@ -7,7 +7,7 @@
 <img src="https://cdn.simpleicons.org/typescript/3178C6" alt="TypeScript" width="60" height="60" />
 <img src="https://cdn.simpleicons.org/tailwindcss/06B6D4" alt="Tailwind CSS" width="60" height="60" />
 
-### GitHub Pull Requestを自動分析し、コード品質とセキュリティを評価するインテリジェントダッシュボード
+## GitHub Pull Request を自動分析し、コード品質とセキュリティを評価するインテリジェントダッシュボード
 
 [📖 ドキュメント](./DASHBOARD_IMPLEMENTATION.md) • [🚀 クイックスタート](./QUICKSTART.md) • [🤝 コントリビューション](#-contributing)
 
@@ -19,8 +19,8 @@
 
 - [概要](#-概要)
 - [主な機能](#-主な機能)
-- [技術スタック](#%EF%B8%8F-技術スタック)
-- [システムアーキテクチャ](#%EF%B8%8F-システムアーキテクチャ)
+- [技術スタック](#-技術スタック)
+- [システムアーキテクチャ](#-システムアーキテクチャ)
 - [環境構築](#-環境構築)
 - [使い方](#-使い方)
 - [プロジェクト構成](#-プロジェクト構成)
@@ -30,28 +30,28 @@
 
 ## 🎯 概要
 
-Code Review Dashboardは、GitHubのPull Requestを自動的に分析し、コード品質、セキュリティリスク、複雑度を評価するNext.js製のWebアプリケーションです。
+Code Review Dashboard は、GitHub の Pull Request を自動的に分析し、コード品質、セキュリティリスク、複雑度を評価する Next.js 製の Web アプリケーションです。
 
 ### 特徴
 
-- ✅ **リアルタイム分析**: GitHub APIと連携してPRデータを取得・分析
-- 🎨 **直感的なUI**: Tailwind CSSによるレスポンシブデザイン
+- ✅ **リアルタイム分析**: GitHub API と連携して PR データを取得・分析
+- 🎨 **直感的な UI**: Tailwind CSS によるレスポンシブデザイン
 - 📊 **可視化**: メトリクスとチャートによる分析結果の可視化
 - 🔍 **フィルタリング**: ステータス、リスクレベル、検索による柔軟なフィルタリング
-- 🚀 **高性能**: Server Componentsによる最適化とキャッシング
+- 🚀 **高性能**: Server Components による最適化とキャッシング
 - 🔒 **セキュア**: 環境変数による安全な認証管理
 
 ---
 
 ## ⚡ 主な機能
 
-### 1. PR分析エンジン
+### 1. PR 分析エンジン
 
 - **複雑度評価**: 変更行数、ファイル数から複雑度を算出
 - **リスク評価**: クリティカルファイル、変更規模からリスクレベルを判定
 - **影響分析**: 変更されたディレクトリと影響範囲を特定
 
-### 2. ダッシュボードUI
+### 2. ダッシュボード UI
 
 ```mermaid
 graph LR
@@ -78,17 +78,17 @@ graph LR
 
 ### 3. メトリクス表示
 
-| メトリクス | 説明 |
-|-----------|------|
-| リスクスコア | 0-100の数値でリスクレベルを評価 |
-| 複雑度スコア | コード変更の複雑さを数値化 |
-| 変更ファイル数 | PRで変更されたファイルの総数 |
-| 変更行数 | 追加・削除された行の合計 |
-| リスクレベル | 低・中・高・クリティカルの4段階 |
+| メトリクス     | 説明                              |
+| -------------- | --------------------------------- |
+| リスクスコア   | 0-100 の数値でリスクレベルを評価  |
+| 複雑度スコア   | コード変更の複雑さを数値化        |
+| 変更ファイル数 | PR で変更されたファイルの総数     |
+| 変更行数       | 追加・削除された行の合計          |
+| リスクレベル   | 低・中・高・クリティカルの 4 段階 |
 
 ### 4. 自動ラベル付与（GitHub Actions）
 
-PRに自動的にラベルを付与し、レビュープロセスを効率化:
+PR に自動的にラベルを付与し、レビュープロセスを効率化:
 
 - 🟢 **low-risk**: リスクレベル: 低
 - 🟡 **medium-risk**: リスクレベル: 中
@@ -136,13 +136,13 @@ PRに自動的にラベルを付与し、レビュープロセスを効率化:
 
 <div align="center">
 
-| ライブラリ | 用途 | ロゴ |
-|-----------|------|------|
-| **React Hook Form** | フォーム管理 | <img src="https://cdn.simpleicons.org/reacthookform/EC5990" alt="React Hook Form" width="30" height="30" /> |
-| **Zod** | バリデーション | <img src="https://cdn.simpleicons.org/zod/3E67B1" alt="Zod" width="30" height="30" /> |
-| **Lucide React** | アイコン | <img src="https://cdn.simpleicons.org/lucide/F56565" alt="Lucide" width="30" height="30" /> |
-| **date-fns** | 日付処理 | <img src="https://cdn.simpleicons.org/datefns/770C56" alt="date-fns" width="30" height="30" /> |
-| **Octokit** | GitHub API | <img src="https://cdn.simpleicons.org/github/181717" alt="GitHub" width="30" height="30" /> |
+| ライブラリ          | 用途           | ロゴ                                                                                                        |
+| ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
+| **React Hook Form** | フォーム管理   | <img src="https://cdn.simpleicons.org/reacthookform/EC5990" alt="React Hook Form" width="30" height="30" /> |
+| **Zod**             | バリデーション | <img src="https://cdn.simpleicons.org/zod/3E67B1" alt="Zod" width="30" height="30" />                       |
+| **Lucide React**    | アイコン       | <img src="https://cdn.simpleicons.org/lucide/F56565" alt="Lucide" width="30" height="30" />                 |
+| **date-fns**        | 日付処理       | <img src="https://cdn.simpleicons.org/datefns/770C56" alt="date-fns" width="30" height="30" />              |
+| **Octokit**         | GitHub API     | <img src="https://cdn.simpleicons.org/github/181717" alt="GitHub" width="30" height="30" />                 |
 
 </div>
 
@@ -152,7 +152,7 @@ PRに自動的にラベルを付与し、レビュープロセスを効率化:
 
 | 技術 | 用途 | ロゴ |
 |------|------|------|
-| **NextAuth.js** | 認証 | <img src="https://cdn.simpleicons.org/auth0/EB5424" alt="Auth" width="30" height="30" /> |
+| **GitHub API** | 認証・データ取得 | <img src="https://cdn.simpleicons.org/github/181717" alt="GitHub" width="30" height="30" /> |
 | **GitHub Actions** | CI/CD | <img src="https://cdn.simpleicons.org/githubactions/2088FF" alt="GitHub Actions" width="30" height="30" /> |
 | **Vercel** | デプロイ | <img src="https://cdn.simpleicons.org/vercel/000000" alt="Vercel" width="30" height="30" /> |
 
@@ -273,15 +273,15 @@ erDiagram
 
 ### 前提条件
 
-- Node.js 20.x以上
+- Node.js 20.x 以上
 - npm / yarn / pnpm / bun
-- GitHubアカウント（Personal Access Token必要）
+- GitHub アカウント（Personal Access Token 必要）
 
 ### 1. リポジトリのクローン
 
 ```bash
 git clone https://github.com/hideaki1979/claudecode_codereview.git
-cd code-review-dashboard
+cd claudecode_codereview
 ```
 
 ### 2. 依存関係のインストール
@@ -301,22 +301,16 @@ pnpm install
 ```bash
 # GitHub API用のトークン
 GITHUB_TOKEN="your_github_token_here"
-
-# API認証用のキー（サーバーサイド）
-API_KEY="your_api_key_here"
-
-# API認証用のキー（クライアントサイド）
-NEXT_PUBLIC_API_KEY="your_api_key_here"
 ```
 
-#### GitHub Personal Access Tokenの取得方法
+#### GitHub Personal Access Token の取得方法
 
-1. GitHubにログイン
+1. GitHub にログイン
 2. Settings → Developer settings → Personal access tokens → Tokens (classic)
 3. "Generate new token (classic)" をクリック
 4. 必要なスコープを選択:
    - `repo` (フルアクセス)
-   - `read:org` (組織のPRを読む場合)
+   - `read:org` (組織の PR を読む場合)
 5. トークンを生成してコピー
 
 ### 4. 開発サーバーの起動
@@ -342,29 +336,24 @@ npm run start
 
 1. **ダッシュボードにアクセス**: [http://localhost:3000/dashboard](http://localhost:3000/dashboard)
 2. **リポジトリ設定**: `src/app/dashboard/DashboardPageWrapper.tsx` で対象リポジトリを設定
-3. **PRを確認**: 一覧からPRを選択してメトリクスを確認
-4. **フィルタリング**: ステータス、リスクレベル、検索でPRを絞り込み
+3. **PR を確認**: 一覧から PR を選択してメトリクスを確認
+4. **フィルタリング**: ステータス、リスクレベル、検索で PR を絞り込み
 
-### リポジトリの変更方法
+### リポジトリの選択方法
 
-`src/app/dashboard/DashboardPageWrapper.tsx` の55-56行目を編集:
+ダッシュボード上部のフォームを使用して、分析したいリポジトリを動的に指定できます。
 
-```typescript
-const { data: prs } = await listPullRequests({
-  owner: 'your-username',  // ← ここを変更
-  repo: 'your-repo',       // ← ここを変更
-  state: 'all',
-  per_page: 20,
-});
-```
+1. **オーナー名**: GitHub リポジトリの所有者名（例: `facebook`）を入力します。
+2. **リポジトリ名**: リポジトリ名（例: `react`）を入力します。
+3. **分析を開始**: ボタンをクリックすると、指定されたリポジトリの分析が始まります。
 
-### GitHub Actionsの設定
+### GitHub Actions の設定
 
-PRへの自動ラベル付与を有効にする:
+PR への自動ラベル付与を有効にする:
 
 1. `.github/workflows/analyze-pr.yml` が既に設定済み
-2. GitHubリポジトリの Settings → Secrets → Actions で `GITHUB_TOKEN` を設定
-3. PRを作成すると自動的に分析・ラベル付与が実行される
+2. GitHub リポジトリの Settings → Secrets → Actions で `GITHUB_TOKEN` を設定
+3. PR を作成すると自動的に分析・ラベル付与が実行される
 
 ---
 
@@ -414,13 +403,13 @@ code-review-dashboard/
 
 ### 主要ディレクトリの説明
 
-| ディレクトリ | 説明 |
-|-------------|------|
-| `src/app/` | Next.js App Routerのページとレイアウト |
-| `src/components/` | 再利用可能なReactコンポーネント |
-| `src/lib/` | ビジネスロジックとユーティリティ |
-| `src/types/` | TypeScript型定義 |
-| `.github/` | GitHub Actions設定とスクリプト |
+| ディレクトリ      | 説明                                    |
+| ----------------- | --------------------------------------- |
+| `src/app/`        | Next.js App Router のページとレイアウト |
+| `src/components/` | 再利用可能な React コンポーネント       |
+| `src/lib/`        | ビジネスロジックとユーティリティ        |
+| `src/types/`      | TypeScript 型定義                       |
+| `.github/`        | GitHub Actions 設定とスクリプト         |
 
 ---
 
@@ -458,16 +447,16 @@ npm run build
 
 ### コーディング規約
 
-- TypeScriptの型を明示的に記述
-- Server ComponentsとClient Componentsを適切に使い分け
-- Tailwind CSSユーティリティクラスを使用
-- ESLintルールに従う
+- TypeScript の型を明示的に記述
+- Server Components と Client Components を適切に使い分け
+- Tailwind CSS ユーティリティクラスを使用
+- ESLint ルールに従う
 
 ---
 
 ## 📝 ライセンス
 
-このプロジェクトはMITライセンスの下で公開されています。詳細は [LICENSE](./LICENSE) ファイルを参照してください。
+このプロジェクトは MIT ライセンスの下で公開されています。詳細は [LICENSE](./LICENSE) ファイルを参照してください。
 
 ---
 
