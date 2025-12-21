@@ -41,6 +41,8 @@ const ANALYSIS_CONFIG = {
     'package.json',
     'package-lock.json',
     'tsconfig.json',
+    'Dockerfile',
+    'docker-compose.yml',
   ],
   CRITICAL_PATTERNS_PREFIX: [
     '.env',
@@ -111,7 +113,7 @@ async function ensureLabelsExist() {
     ...Object.values(LABELS.features),
   ];
 
-  const { data: existingLabels } = await octokit.paginate(octokit.rest.issues.listLabelsForRepo, {
+  const existingLabels = await octokit.paginate(octokit.rest.issues.listLabelsForRepo, {
     owner: REPO_OWNER,
     repo: REPO_NAME,
     per_page: ANALYSIS_CONFIG.CONSTANTS.PER_PAGE,
@@ -150,6 +152,7 @@ async function ensureLabelsExist() {
           console.log(`  - ラベル "${label.name}" は既に存在します (競合)`);
         } else {
           console.error(`  ✗ ラベル "${label.name}" の確認中にエラー:`, error.message);
+          throw error;
         }
       }
     })
@@ -162,7 +165,7 @@ async function ensureLabelsExist() {
 async function getPullRequestDiff() {
   console.log(`\n🔍 PR #${PR_NUMBER} の差分を取得中...`);
 
-  const { data: files } = await octokit.paginate(octokit.rest.pulls.listFiles, {
+  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
     owner: REPO_OWNER,
     repo: REPO_NAME,
     pull_number: PARSED_PR_NUMBER,
