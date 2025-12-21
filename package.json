@@ -14,7 +14,6 @@
     "date-fns": "^4.1.0",
     "lucide-react": "^0.556.0",
     "next": "16.0.10",
-    "next-auth": "^5.0.0-beta.30",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-hook-form": "^7.68.0",
