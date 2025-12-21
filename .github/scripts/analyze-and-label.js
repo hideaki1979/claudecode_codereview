@@ -53,6 +53,7 @@ const ANALYSIS_CONFIG = {
     HTTP_STATUS_UNPROCESSABLE_CONTENT: 422,
     JSON_INDENT: 2,
     EXIT_CODE_ERROR: 1,
+    PER_PAGE: 100,
   },
 };
 
@@ -65,7 +66,7 @@ const {
 } = process.env;
 
 // PR_NUMBERを数値にパースし、NaNチェック
-const PARSED_PR_NUMBER = parseInt(PR_NUMBER, ANALYSIS_CONFIG.CONSTANTS.PARSE_INT_RADIX)
+const PARSED_PR_NUMBER = parseInt(PR_NUMBER, ANALYSIS_CONFIG.CONSTANTS.PARSE_INT_RADIX);
 
 if (!GITHUB_TOKEN || !PR_NUMBER || !REPO_OWNER || !REPO_NAME) {
   console.error('❌ 必要な環境変数が設定されていません');
@@ -113,6 +114,7 @@ async function ensureLabelsExist() {
   const { data: existingLabels } = await octokit.rest.issues.listLabelsForRepo({
     owner: REPO_OWNER,
     repo: REPO_NAME,
+    per_page: PER_PAGE,
   });
 
   const existingLabelNames = new Set(existingLabels.map(l => l.name));
@@ -132,7 +134,7 @@ async function ensureLabelsExist() {
   await Promise.all(
     labelsToCreate.map(async (label) => {
       try {
-        // ラベルが存在するか確認
+        // ラベルを作成（存在する場合はAPIエラーが返ることを期待）
         await octokit.rest.issues.createLabel({
           owner: REPO_OWNER,
           repo: REPO_NAME,
@@ -164,6 +166,7 @@ async function getPullRequestDiff() {
     owner: REPO_OWNER,
     repo: REPO_NAME,
     pull_number: PARSED_PR_NUMBER,
+    per_page: PER_PAGE,
   });
 
   console.log(`  ✓ ${files.length} ファイルの変更を検出`);
@@ -258,7 +261,8 @@ function analyzeSimplified(diff) {
 async function applyLabels(analysis) {
   console.log('\n🏷️  ラベルを適用中...');
 
-  const labelsToApply = [];
+  // 1. この実行で適用すべきラベルを決定
+  const newLabels = new Set();
 
   // リスクレベルラベル
   const riskLabel = LABELS.risk[analysis.risk.risk_level];
@@ -279,15 +283,36 @@ async function applyLabels(analysis) {
     console.log(`  ✓ ${LABELS.features.criticalFiles.description}`);
   }
 
-  // ラベル付与
+  // 2. 現在PRに付与されているラベルを取得
+  const { data: currentLabels } = await octokit.rest.issues.listLabelsOnIssue({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    issue_number: PARSED_PR_NUMBER,
+  });
+
+  // 3. このアクションが管理するすべてのラベル名を定義
+  const managedLabelNames = new Set({
+    ...Object.values(LABELS.risk).map(l => l.name),
+    ...Object.values(LABELS.features).map(l => l.name),
+  });
+
+  // 4. 手動で付与されたラベルを維持するため、管理外のラベルをフィルタリング
+  const finalLabels = currentLabels
+    .map(l => l.name)
+    .filter(name => !managedLabelNames.has(name));
+
+  // 5. 今回適用すべき新しいラベルを追加
+  newLabels.forEach(label => finalLabels.push(label));
+
+  // 6. `setLabels` を使ってラベルを一度に更新
   await octokit.rest.issues.addLabels({
     owner: REPO_OWNER,
     repo: REPO_NAME,
     issue_number: PARSED_PR_NUMBER,
-    labels: labelsToApply,
+    labels: [...new Set(finalLabels)],
   });
 
-  console.log(`\n✅ ${labelsToApply.length} 個のラベルを適用しました`);
+  console.log(`\n✅ ${finalLabels.length} 個のラベルを適用しました： ${finalLabels.join(', ')}`);
 }
 
 /**

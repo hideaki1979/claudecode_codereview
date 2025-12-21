@@ -35,7 +35,6 @@ GitHub Actions がラベルを付与できるように、リポジトリ設定�
 1. リポジトリの **Settings** → **Actions** → **General** を開く
 2. **Workflow permissions** セクションで以下を確認:
    - ✅ "Read and write permissions" を選択
-   - ✅ "Allow GitHub Actions to create and approve pull requests" にチェック
 
 ### 2. ファイルをプッシュ
 
