@@ -114,7 +114,7 @@ async function ensureLabelsExist() {
   const { data: existingLabels } = await octokit.rest.issues.listLabelsForRepo({
     owner: REPO_OWNER,
     repo: REPO_NAME,
-    per_page: PER_PAGE,
+    per_page: ANALYSIS_CONFIG.CONSTANTS.PER_PAGE,
   });
 
   const existingLabelNames = new Set(existingLabels.map(l => l.name));
@@ -166,7 +166,7 @@ async function getPullRequestDiff() {
     owner: REPO_OWNER,
     repo: REPO_NAME,
     pull_number: PARSED_PR_NUMBER,
-    per_page: PER_PAGE,
+    per_page: ANALYSIS_CONFIG.CONSTANTS.PER_PAGE,
   });
 
   console.log(`  ✓ ${files.length} ファイルの変更を検出`);
@@ -267,19 +267,19 @@ async function applyLabels(analysis) {
   // リスクレベルラベル
   const riskLabel = LABELS.risk[analysis.risk.risk_level];
   if (riskLabel) {
-    labelsToApply.push(riskLabel.name);
+    newLabels.push(riskLabel.name);
     console.log(`  ✓ リスクレベル: ${riskLabel.description}`);
   }
 
   // 大規模変更ラベル
   if (analysis.complexity.lines_changed > ANALYSIS_CONFIG.THRESHOLDS.LARGE_CHANGES_LINES) {
-    labelsToApply.push(LABELS.features.largeChanges.name);
+    newLabels.push(LABELS.features.largeChanges.name);
     console.log(`  ✓ ${LABELS.features.largeChanges.description}`);
   }
 
   // クリティカルファイル変更ラベル
   if (analysis.impact.critical_files.length > 0) {
-    labelsToApply.push(LABELS.features.criticalFiles.name);
+    newLabels.push(LABELS.features.criticalFiles.name);
     console.log(`  ✓ ${LABELS.features.criticalFiles.description}`);
   }
 
@@ -291,10 +291,10 @@ async function applyLabels(analysis) {
   });
 
   // 3. このアクションが管理するすべてのラベル名を定義
-  const managedLabelNames = new Set({
+  const managedLabelNames = new Set([
     ...Object.values(LABELS.risk).map(l => l.name),
     ...Object.values(LABELS.features).map(l => l.name),
-  });
+  ]);
 
   // 4. 手動で付与されたラベルを維持するため、管理外のラベルをフィルタリング
   const finalLabels = currentLabels
