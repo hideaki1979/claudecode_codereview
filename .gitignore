@@ -44,3 +44,6 @@ next-env.d.ts
 .mcp.json
 .serena
 .vscode
+
+# GitHub Actions temporary files
+.github/analysis-result.json
