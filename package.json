@@ -6,14 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "tsx src/lib/db/migrate.ts",
+    "db:reset": "tsx src/lib/db/reset.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@octokit/rest": "^22.0.1",
+    "@vercel/postgres": "^0.10.0",
     "date-fns": "^4.1.0",
+    "kysely": "^0.28.9",
     "lucide-react": "^0.556.0",
     "next": "16.0.10",
+    "pg": "^8.16.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-hook-form": "^7.68.0",
@@ -22,11 +27,14 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.25",
+    "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.0.6",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
