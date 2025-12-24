@@ -12,15 +12,16 @@ Code Review DashboardにおけるデータベースレイヤーとORM選定の�
 
 ## 📋 目次
 
-- [背景と課題](#-背景と課題)
-- [技術選定](#-技術選定)
-- [選定結果サマリー](#-選定結果サマリー)
-- [アーキテクチャ](#-アーキテクチャ)
-- [実装ロードマップ](#-実装ロードマップ)
-- [コスト分析](#-コスト分析)
-- [パフォーマンス分析](#-パフォーマンス分析)
-- [セットアップ手順](#-セットアップ手順)
-- [リスクと対策](#-リスクと対策)
+- [背景と課題](#背景と課題)
+- [技術選定](#技術選定)
+- [アーキテクチャ](#アーキテクチャ)
+- [実装ロードマップ](#実装ロードマップ)
+- [コスト分析](#コスト分析)
+- [パフォーマンス分析](#パフォーマンス分析)
+- [セットアップ手順](#セットアップ手順)
+- [リスクと対策](#リスクと対策)
+- [参考資料](#参考資料)
+- [次のステップ](#次のステップ)
 
 ---
 
@@ -104,7 +105,7 @@ Code Review Dashboardは現在、以下の構成で動作しています：
    - プロバイダー変更が容易（Vercel Postgres → AWS RDS等）
    - ベンダーロックインリスク低減
 
-**具体例：傾向分析クエリ**
+### 具体例：傾向分析クエリ
 
 ```typescript
 // Kyselyの強み：複雑な集計クエリが型安全に書ける
@@ -724,26 +725,24 @@ export async function trackQuery(
 
 ```yaml
 # docker-compose.yml
-version: '3.9'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: code-review-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: code_review_dashboard
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORDが設定されていません。.env.exampleを参考に.envファイルを作成してください。}
+      POSTGRES_DB: ${POSTGRES_DB:-code_review_dashboard}
       POSTGRES_SHARED_BUFFERS: 256MB
       POSTGRES_MAX_CONNECTIONS: 100
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-EXEC", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -751,12 +750,12 @@ services:
       - code-review-network
 
   pgadmin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:8.4
     container_name: code-review-pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@codereview.local
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORDが設定されていません。.env.exampleを参考に.envファイルを作成してください。}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "5050:80"
@@ -801,7 +800,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
 ```bash
 # .env.local
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/code_review_dashboard"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/code_review_dashboard"
 GITHUB_TOKEN="your_github_token_here"
 ```
 
@@ -952,12 +951,12 @@ export async function up(db: Kysely<any>): Promise<void> {
   // Repositories table
   await db.schema
     .createTable('repositories')
-    .addColumn('id', 'text', col =>
-      col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
+    .addColumn('id', 'uuid', (col) =>
+      col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
-    .addColumn('owner', 'text', col => col.notNull())
-    .addColumn('name', 'text', col => col.notNull())
-    .addColumn('created_at', 'timestamp', col =>
+    .addColumn('owner', 'text', (col) => col.notNull())
+    .addColumn('name', 'text', (col) => col.notNull())
+    .addColumn('created_at', 'timestamp', (col) =>
       col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull()
     )
     .addUniqueConstraint('repositories_owner_name_unique', ['owner', 'name'])
@@ -966,54 +965,55 @@ export async function up(db: Kysely<any>): Promise<void> {
   // Pull Requests table
   await db.schema
     .createTable('pull_requests')
-    .addColumn('id', 'text', col =>
-      col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
+    .addColumn('id', 'uuid', (col) =>
+      col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
-    .addColumn('repository_id', 'text', col =>
+    .addColumn('repository_id', 'uuid', (col) =>
       col.references('repositories.id').onDelete('cascade').notNull()
     )
-    .addColumn('number', 'integer', col => col.notNull())
-    .addColumn('title', 'text', col => col.notNull())
-    .addColumn('state', 'text', col => col.notNull())
-    .addColumn('created_at', 'timestamp', col => col.notNull())
-    .addColumn('updated_at', 'timestamp', col => col.notNull())
-    .addUniqueConstraint('pull_requests_repo_number_unique',
-      ['repository_id', 'number']
-    )
+    .addColumn('number', 'integer', (col) => col.notNull())
+    .addColumn('title', 'text', (col) => col.notNull())
+    .addColumn('state', 'text', (col) => col.notNull())
+    .addColumn('created_at', 'timestamp', (col) => col.notNull())
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull())
+    .addUniqueConstraint('pull_requests_repo_number_unique', [
+      'repository_id',
+      'number',
+    ])
     .execute()
 
   // Analyses table
   await db.schema
     .createTable('analyses')
-    .addColumn('id', 'text', col =>
-      col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
+    .addColumn('id', 'uuid', (col) =>
+      col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
-    .addColumn('pr_id', 'text', col =>
+    .addColumn('pr_id', 'uuid', (col) =>
       col.references('pull_requests.id').onDelete('cascade').notNull()
     )
-    .addColumn('risk_score', 'integer', col => col.notNull())
-    .addColumn('risk_level', 'text', col => col.notNull())
-    .addColumn('complexity_score', 'integer', col => col.notNull())
-    .addColumn('complexity_level', 'text', col => col.notNull())
-    .addColumn('lines_changed', 'integer', col => col.notNull())
-    .addColumn('files_changed', 'integer', col => col.notNull())
-    .addColumn('security_score', 'integer', col => col.notNull())
-    .addColumn('analyzed_at', 'timestamp', col => col.notNull())
+    .addColumn('risk_score', 'integer', (col) => col.notNull())
+    .addColumn('risk_level', 'text', (col) => col.notNull())
+    .addColumn('complexity_score', 'integer', (col) => col.notNull())
+    .addColumn('complexity_level', 'text', (col) => col.notNull())
+    .addColumn('lines_changed', 'integer', (col) => col.notNull())
+    .addColumn('files_changed', 'integer', (col) => col.notNull())
+    .addColumn('security_score', 'integer', (col) => col.notNull())
+    .addColumn('analyzed_at', 'timestamp', (col) => col.notNull())
     .execute()
 
   // Security Findings table
   await db.schema
     .createTable('security_findings')
-    .addColumn('id', 'text', col =>
-      col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
+    .addColumn('id', 'uuid', (col) =>
+      col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
-    .addColumn('analysis_id', 'text', col =>
+    .addColumn('analysis_id', 'uuid', (col) =>
       col.references('analyses.id').onDelete('cascade').notNull()
     )
-    .addColumn('type', 'text', col => col.notNull())
-    .addColumn('severity', 'text', col => col.notNull())
-    .addColumn('message', 'text', col => col.notNull())
-    .addColumn('file', 'text', col => col.notNull())
+    .addColumn('type', 'text', (col) => col.notNull())
+    .addColumn('severity', 'text', (col) => col.notNull())
+    .addColumn('message', 'text', (col) => col.notNull())
+    .addColumn('file', 'text', (col) => col.notNull())
     .addColumn('line', 'integer')
     .addColumn('snippet', 'text')
     .execute()
