@@ -45,13 +45,15 @@ export async function migrateToLatest(): Promise<void> {
 
 // Run migrations if called directly
 if (require.main === module) {
-  migrateToLatest()
-    .then(() => {
+  ;(async () => {
+    try {
+      await migrateToLatest()
       console.log('🎉 Database migration complete!')
-      process.exit(0)
-    })
-    .catch((error) => {
+    } catch (error) {
       console.error('💥 Migration error:', error)
       process.exit(1)
-    })
+    } finally {
+      await db.destroy()
+    }
+  })()
 }
