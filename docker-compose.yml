@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORDが設定されていません。.env.exampleを参考に.envファイルを作成してください。}
       POSTGRES_DB: ${POSTGRES_DB:-code_review_dashboard}
       POSTGRES_SHARED_BUFFERS: 256MB
       POSTGRES_MAX_CONNECTIONS: 100
@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORDが設定されていません。.env.exampleを参考に.envファイルを作成してください。}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "5050:80"

@@ -33,8 +33,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // ===== PULL REQUESTS TABLE =====
   await db.schema
     .createTable('pull_requests')
-    .addColumn('id', 'text', (col) =>
-      col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
+    .addColumn('id', 'uuid', (col) =>
+      col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
     .addColumn('repository_id', 'uuid', (col) =>
       col.references('repositories.id').onDelete('cascade').notNull()
@@ -70,7 +70,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn('id', 'uuid', (col) =>
       col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
-    .addColumn('pr_id', 'text', (col) =>
+    .addColumn('pr_id', 'uuid', (col) =>
       col.references('pull_requests.id').onDelete('cascade').notNull()
     )
     .addColumn('risk_score', 'integer', (col) => col.notNull())
@@ -110,7 +110,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn('id', 'uuid', (col) =>
       col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
-    .addColumn('analysis_id', 'text', (col) =>
+    .addColumn('analysis_id', 'uuid', (col) =>
       col.references('analyses.id').onDelete('cascade').notNull()
     )
     .addColumn('type', 'text', (col) => col.notNull())

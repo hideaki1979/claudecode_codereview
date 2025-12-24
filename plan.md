@@ -193,15 +193,15 @@ erDiagram
     analyses ||--o{ security_findings : includes
 
     repositories {
-        text id PK
+        uuid id PK
         text owner
         text name
         timestamp created_at
     }
 
     pull_requests {
-        text id PK
-        text repository_id FK
+        uuid id PK
+        uuid repository_id FK
         integer number
         text title
         text state
@@ -210,8 +210,8 @@ erDiagram
     }
 
     analyses {
-        text id PK
-        text pr_id FK
+        uuid id PK
+        uuid pr_id FK
         integer risk_score
         text risk_level
         integer complexity_score
@@ -223,8 +223,8 @@ erDiagram
     }
 
     security_findings {
-        text id PK
-        text analysis_id FK
+        uuid id PK
+        uuid analysis_id FK
         text type
         text severity
         text message
@@ -242,10 +242,10 @@ erDiagram
 
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
-| id | TEXT | PK | UUID |
+| id | UUID | PK, DEFAULT uuid_generate_v4() | UUID主キー |
 | owner | TEXT | NOT NULL | リポジトリオーナー名 |
 | name | TEXT | NOT NULL | リポジトリ名 |
-| created_at | TIMESTAMP | NOT NULL | 作成日時 |
+| created_at | TIMESTAMP | NOT NULL, DEFAULT CURRENT_TIMESTAMP | 作成日時 |
 
 **インデックス**: `UNIQUE(owner, name)`
 
@@ -255,8 +255,8 @@ erDiagram
 
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
-| id | TEXT | PK | UUID |
-| repository_id | TEXT | FK | リポジトリID |
+| id | UUID | PK, DEFAULT uuid_generate_v4() | UUID主キー |
+| repository_id | UUID | FK → repositories.id, ON DELETE CASCADE | リポジトリID |
 | number | INTEGER | NOT NULL | PR番号 |
 | title | TEXT | NOT NULL | PRタイトル |
 | state | TEXT | NOT NULL | 状態（open/closed/merged） |
@@ -265,7 +265,8 @@ erDiagram
 
 **インデックス**:
 - `UNIQUE(repository_id, number)`
-- `INDEX(repository_id, state)`
+- `INDEX(repository_id)` - リポジトリ検索用
+- `INDEX(repository_id, state)` - 状態フィルタリング用
 
 #### 3. analyses
 
@@ -273,21 +274,21 @@ erDiagram
 
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
-| id | TEXT | PK | UUID |
-| pr_id | TEXT | FK | PR ID |
+| id | UUID | PK, DEFAULT uuid_generate_v4() | UUID主キー |
+| pr_id | UUID | FK → pull_requests.id, ON DELETE CASCADE | PR ID |
 | risk_score | INTEGER | NOT NULL | リスクスコア（0-100） |
-| risk_level | TEXT | NOT NULL | リスクレベル |
+| risk_level | TEXT | NOT NULL | リスクレベル（low/medium/high/critical） |
 | complexity_score | INTEGER | NOT NULL | 複雑度スコア |
-| complexity_level | TEXT | NOT NULL | 複雑度レベル |
+| complexity_level | TEXT | NOT NULL | 複雑度レベル（low/medium/high） |
 | lines_changed | INTEGER | NOT NULL | 変更行数 |
 | files_changed | INTEGER | NOT NULL | 変更ファイル数 |
 | security_score | INTEGER | NOT NULL | セキュリティスコア |
 | analyzed_at | TIMESTAMP | NOT NULL | 分析日時 |
 
 **インデックス**:
-- `INDEX(pr_id)`
-- `INDEX(analyzed_at)`
-- `INDEX(risk_level, analyzed_at)`
+- `INDEX(pr_id)` - PR検索用
+- `INDEX(analyzed_at)` - 時系列検索用
+- `INDEX(risk_level, analyzed_at)` - リスク別時系列検索用（複合）
 
 #### 4. security_findings
 
@@ -295,18 +296,18 @@ erDiagram
 
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
-| id | TEXT | PK | UUID |
-| analysis_id | TEXT | FK | 分析ID |
+| id | UUID | PK, DEFAULT uuid_generate_v4() | UUID主キー |
+| analysis_id | UUID | FK → analyses.id, ON DELETE CASCADE | 分析ID |
 | type | TEXT | NOT NULL | 検出タイプ |
-| severity | TEXT | NOT NULL | 深刻度 |
-| message | TEXT | NOT NULL | メッセージ |
+| severity | TEXT | NOT NULL | 深刻度（low/medium/high/critical） |
+| message | TEXT | NOT NULL | エラーメッセージ |
 | file | TEXT | NOT NULL | ファイルパス |
-| line | INTEGER | NULL | 行番号 |
-| snippet | TEXT | NULL | コードスニペット |
+| line | INTEGER | NULL | 行番号（オプション） |
+| snippet | TEXT | NULL | コードスニペット（オプション） |
 
 **インデックス**:
-- `INDEX(analysis_id)`
-- `INDEX(severity, type)`
+- `INDEX(analysis_id)` - 分析結果検索用
+- `INDEX(severity, type)` - 深刻度・タイプ別検索用（複合）
 
 ### システムアーキテクチャ
 
