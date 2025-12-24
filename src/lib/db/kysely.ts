@@ -9,7 +9,25 @@
 
 import { Kysely, PostgresDialect } from 'kysely'
 import { Pool } from 'pg'
+import { z } from 'zod'
+import { fromZodError } from 'zod-validation-error'
 import type { Database } from './types'
+
+/**
+ * Environment variable schema for database configuration
+ *
+ * Validates that at least one database connection string is provided.
+ */
+const envSchema = z.object({
+  DATABASE_URL: z
+    .string()
+    .url('DATABASE_URL must be a valid PostgreSQL connection URL')
+    .optional(),
+  POSTGRES_URL: z
+    .string()
+    .url('POSTGRES_URL must be a valid PostgreSQL connection URL')
+    .optional(),
+})
 
 /**
  * Create PostgreSQL connection pool
@@ -17,9 +35,23 @@ import type { Database } from './types'
  * Environment variables:
  * - DATABASE_URL: PostgreSQL connection string (development)
  * - POSTGRES_URL: Vercel Postgres connection string (production)
+ *
+ * @returns Configured PostgreSQL connection pool
+ * @throws {Error} If environment variables are invalid or missing
  */
-const createPool = () => {
-  const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL
+const createPool = (): Pool => {
+  // Validate environment variables
+  const parseResult = envSchema.safeParse(process.env)
+
+  if (!parseResult.success) {
+    const validationError = fromZodError(parseResult.error)
+    throw new Error(
+      `Invalid database configuration: ${validationError.message}`
+    )
+  }
+
+  const env = parseResult.data
+  const connectionString = env.POSTGRES_URL || env.DATABASE_URL
 
   if (!connectionString) {
     throw new Error(

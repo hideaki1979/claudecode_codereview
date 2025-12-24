@@ -10,16 +10,17 @@
  */
 
 import { Kysely, sql } from 'kysely'
+import type { Database } from '../src/lib/db/types'
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<Database>): Promise<void> {
   // Ensure UUID extension is available (redundant with init script, but safe)
   await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`.execute(db)
 
   // ===== REPOSITORIES TABLE =====
   await db.schema
     .createTable('repositories')
-    .addColumn('id', 'text', (col) =>
-      col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
+    .addColumn('id', 'uuid', (col) =>
+      col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
     .addColumn('owner', 'text', (col) => col.notNull())
     .addColumn('name', 'text', (col) => col.notNull())
@@ -35,7 +36,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('id', 'text', (col) =>
       col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
     )
-    .addColumn('repository_id', 'text', (col) =>
+    .addColumn('repository_id', 'uuid', (col) =>
       col.references('repositories.id').onDelete('cascade').notNull()
     )
     .addColumn('number', 'integer', (col) => col.notNull())
@@ -66,8 +67,8 @@ export async function up(db: Kysely<any>): Promise<void> {
   // ===== ANALYSES TABLE =====
   await db.schema
     .createTable('analyses')
-    .addColumn('id', 'text', (col) =>
-      col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
+    .addColumn('id', 'uuid', (col) =>
+      col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
     .addColumn('pr_id', 'text', (col) =>
       col.references('pull_requests.id').onDelete('cascade').notNull()
@@ -106,8 +107,8 @@ export async function up(db: Kysely<any>): Promise<void> {
   // ===== SECURITY FINDINGS TABLE =====
   await db.schema
     .createTable('security_findings')
-    .addColumn('id', 'text', (col) =>
-      col.primaryKey().defaultTo(sql`uuid_generate_v4()::text`)
+    .addColumn('id', 'uuid', (col) =>
+      col.primaryKey().defaultTo(sql`uuid_generate_v4()`)
     )
     .addColumn('analysis_id', 'text', (col) =>
       col.references('analyses.id').onDelete('cascade').notNull()
@@ -137,7 +138,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   console.log('✅ Initial schema migration completed')
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<Database>): Promise<void> {
   // Drop tables in reverse order (respecting foreign key constraints)
   await db.schema.dropTable('security_findings').execute()
   await db.schema.dropTable('analyses').execute()

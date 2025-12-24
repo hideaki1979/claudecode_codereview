@@ -6,7 +6,7 @@
  */
 
 import 'dotenv/config'
-import { Kysely, Migrator, FileMigrationProvider } from 'kysely'
+import { Migrator, FileMigrationProvider } from 'kysely'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { db } from './kysely'
@@ -16,7 +16,7 @@ import { db } from './kysely'
  */
 export async function migrateToLatest(): Promise<void> {
   const migrator = new Migrator({
-    db: db as Kysely<any>,
+    db,
     provider: new FileMigrationProvider({
       fs,
       path,
