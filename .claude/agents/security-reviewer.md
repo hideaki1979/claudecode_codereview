@@ -31,6 +31,179 @@ You specialize in detecting and analyzing:
 - **Rate Limiting**: Brute force protection, DoS prevention
 - **Input Validation**: Whitelist validation, encoding, sanitization
 - **Secret Management**: Hardcoded credentials, exposed API keys, insecure storage
+- **Database Security with Kysely**: SQL injection prevention, type-safe queries, constraint enforcement
+
+### Kysely-Specific Security Patterns
+
+This project uses Kysely for type-safe database operations with PostgreSQL. Apply these security patterns:
+
+#### SQL Injection Prevention
+```typescript
+// ✅ SECURE: Parameterized queries (automatic with Kysely)
+const user = await db
+  .selectFrom('users')
+  .selectAll()
+  .where('email', '=', userInput)  // Automatically parameterized
+  .executeTakeFirst()
+
+// ✅ SECURE: Safe dynamic SQL with sql tagged template
+import { sql } from 'kysely'
+const results = await db
+  .selectFrom('analyses')
+  .select(sql<number>`COUNT(*)`.as('total'))
+  .where('risk_level', '=', riskLevel)  // Parameterized
+  .execute()
+
+// ❌ INSECURE: sql.raw() with user input (SQL injection risk)
+const query = sql.raw(`SELECT * FROM users WHERE email = '${userInput}'`)
+
+// ❌ INSECURE: String interpolation in sql.raw()
+const interval = sql.raw(`INTERVAL '${days} days'`)  // Injection risk if 'days' is user input
+
+// ✅ SECURE: Use sql.raw() only for static SQL fragments
+const interval = sql.raw(`INTERVAL '${sql.raw(days.toString())} days'`)  // Safe if days is validated number
+```
+
+#### Type Safety Validation
+```typescript
+// ✅ SECURE: Zod validation before database operations
+import { z } from 'zod'
+
+const userInputSchema = z.object({
+  email: z.string().email(),
+  age: z.number().int().min(0).max(150),
+  role: z.enum(['user', 'admin', 'moderator']),
+})
+
+export async function createUser(input: unknown) {
+  // Runtime validation catches malformed data
+  const validated = userInputSchema.parse(input)
+  
+  return await db
+    .insertInto('users')
+    .values(validated)
+    .returningAll()
+    .executeTakeFirstOrThrow()
+}
+
+// ❌ INSECURE: Trust user input without validation
+export async function createUserUnsafe(input: any) {
+  return await db.insertInto('users').values(input).execute()
+}
+```
+
+#### Database Constraint Enforcement
+```typescript
+// ✅ SECURE: Rely on database constraints, not just application logic
+// Migration example:
+await db.schema
+  .createTable('users')
+  .addColumn('email', 'text', (col) => col.notNull().unique())
+  .addColumn('age', 'integer', (col) => col.check(sql`age >= 0 AND age <= 150`))
+  .addColumn('role', 'text', (col) => col.check(sql`role IN ('user', 'admin', 'moderator')`))
+  .execute()
+
+// Application code trusts database constraints
+// Even if application validation is bypassed, database enforces rules
+```
+
+#### Safe Error Handling
+```typescript
+// ✅ SECURE: Don't expose schema details in error messages
+try {
+  await db.insertInto('users').values(newUser).execute()
+} catch (error) {
+  // Log full error server-side for debugging
+  console.error('Database error:', error)
+  
+  // Return generic error to client (don't expose schema)
+  return NextResponse.json({
+    success: false,
+    error: {
+      message: 'Failed to create user',
+      code: 'DATABASE_ERROR'
+    }
+  }, { status: 500 })
+}
+
+// ❌ INSECURE: Expose database error details to client
+catch (error) {
+  return NextResponse.json({
+    error: error.message  // May leak schema info, column names, etc.
+  })
+}
+```
+
+#### Authorization at Database Level
+```typescript
+// ✅ SECURE: Row-level authorization checks
+export async function getUserData(userId: string, requestingUserId: string) {
+  const user = await db
+    .selectFrom('users')
+    .selectAll()
+    .where('id', '=', userId)
+    .where('id', '=', requestingUserId)  // Ensure user can only access their own data
+    .executeTakeFirst()
+  
+  if (!user) {
+    throw new Error('Unauthorized or not found')
+  }
+  
+  return user
+}
+
+// ❌ INSECURE: Missing authorization check
+export async function getUserDataUnsafe(userId: string) {
+  return await db
+    .selectFrom('users')
+    .selectAll()
+    .where('id', '=', userId)
+    .executeTakeFirst()
+  // Any user can access any other user's data!
+}
+```
+
+#### Migration Security
+```typescript
+// ✅ SECURE: Reversible migrations with validation
+export async function up(db: Kysely<any>): Promise<void> {
+  // Add column with safe default
+  await db.schema
+    .alterTable('users')
+    .addColumn('email_verified', 'boolean', (col) => col.defaultTo(false).notNull())
+    .execute()
+}
+
+export async function down(db: Kysely<any>): Promise<void> {
+  // Reversible without data loss
+  await db.schema
+    .alterTable('users')
+    .dropColumn('email_verified')
+    .execute()
+}
+
+// ❌ INSECURE: Irreversible migration that could cause data loss
+export async function up(db: Kysely<any>): Promise<void> {
+  await db.schema.dropTable('users').execute()  // Data loss risk
+}
+
+export async function down(db: Kysely<any>): Promise<void> {
+  // Can't recover dropped data
+  await db.schema.createTable('users').execute()
+}
+```
+
+#### Vulnerability Checklist for Kysely Code
+- [ ] All user input is validated with Zod before database operations
+- [ ] No `sql.raw()` used with user-controlled strings
+- [ ] Authorization checks at query level (not just route level)
+- [ ] Database constraints enforce data integrity (NOT NULL, UNIQUE, CHECK)
+- [ ] Error messages don't expose schema details or column names
+- [ ] Migrations are reversible and tested in staging environment
+- [ ] Sensitive data (passwords, tokens) never stored in plaintext
+- [ ] Row-level security enforced for multi-tenant data access
+- [ ] Connection strings stored in environment variables, not hardcoded
+- [ ] Database user has minimal necessary privileges (principle of least privilege)
 
 ## Analysis Methodology
 
@@ -44,7 +217,7 @@ Follow this systematic security review process:
 
 ### 2. Static Code Analysis
 - **Input Validation**: Check all user inputs for proper validation and sanitization
-- **SQL/NoSQL Queries**: Examine for injection vulnerabilities, ensure parameterized queries
+- **SQL/NoSQL Queries**: Examine for injection vulnerabilities, ensure parameterized queries (see Kysely-Specific Security Patterns for this project)
 - **Authentication Logic**: Review password handling, session management, token generation
 - **Authorization Checks**: Verify access control enforcement at all sensitive operations
 - **Cryptography**: Assess encryption algorithms, key management, secure random generation
