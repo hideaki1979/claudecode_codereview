@@ -9,8 +9,72 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { usePullRequests } from '@/hooks/usePullRequests';
-import { getPullRequestDiffAPI } from '@/lib/api-client';
-import { analyzePullRequest } from '@/lib/analysis';
+// API client for analysis endpoint
+async function runAnalysisAPI(params: {
+  owner: string;
+  repo: string;
+  pull_number: number;
+  signal?: AbortSignal;
+}): Promise<{
+  success: boolean;
+  data?: {
+    analysis: {
+      id: string;
+      risk_score: number;
+      risk_level: string;
+      complexity_score: number;
+      complexity_level: string;
+      security_score: number;
+      lines_changed: number;
+      files_changed: number;
+      analyzed_at: string;
+    };
+    analyzed_at: string;
+    metrics: {
+      risk: {
+        risk_score: number;
+        risk_level: 'low' | 'medium' | 'high' | 'critical';
+        factors: string[];
+      };
+      complexity: {
+        complexity_score: number;
+        complexity_level: 'low' | 'medium' | 'high' | 'critical';
+        lines_changed: number;
+        files_changed: number;
+      };
+      security: {
+        security_score: number;
+        issue_count: number;
+        issues: Array<{
+          type: string;
+          severity: 'low' | 'medium' | 'high' | 'critical';
+          message: string;
+          file?: string;
+          line?: number;
+          snippet?: string;
+        }>;
+      };
+    };
+  };
+  error?: string;
+  code?: string;
+}> {
+  const response = await fetch('/api/analysis', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params),
+    signal: params.signal,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Analysis failed');
+  }
+
+  return response.json();
+}
 import { PRCard } from '@/components/PRCard';
 import { AnalysisChart } from '@/components/AnalysisChart';
 import { PRFilter } from '@/components/PRFilter';
@@ -108,23 +172,24 @@ export function DashboardContent({
         const results = await Promise.all(
           pullRequests.map(async (pr: GitHubPullRequestSimple) => {
             try {
-              // PR の差分を取得（APIルート経由）
-              const diffResponse = await getPullRequestDiffAPI({
+              // 分析APIを呼び出し（分析実行 + DB保存）
+              const apiResult = await runAnalysisAPI({
                 owner,
                 repo,
                 pull_number: pr.number,
-              }, { signal });
-
-              const diff = diffResponse.data;
-
-              // 差分を分析
-              const result = analyzePullRequest(diff);
+                signal,
+              });
 
               // 分析成功時のみ結果を返す
-              if (result.status === 'success') {
+              if (apiResult.success && apiResult.data) {
                 return {
                   pr,
-                  analysis: result.data,
+                  analysis: {
+                    risk: apiResult.data.metrics.risk,
+                    complexity: apiResult.data.metrics.complexity,
+                    security: apiResult.data.metrics.security,
+                    analyzed_at: apiResult.data.analyzed_at,
+                  },
                 } as PRWithAnalysis;
               }
               return null;
