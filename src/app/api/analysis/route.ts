@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getPullRequest } from '@/lib/github/pullRequests'
-import { getPullRequestDiffAPI } from '@/lib/api-client'
+import { getPullRequestDiff } from '@/lib/github/diff'
 import { analyzePullRequest } from '@/lib/analysis'
 import { db } from '@/lib/db/kysely'
 import { findOrCreateRepository } from '@/lib/db/repositories'
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // 注: これらの関数はエラー時に例外を投げるため、成功時のみレスポンスを返す
     const [prResult, diffResult] = await Promise.all([
       getPullRequest({ owner, repo, pull_number }),
-      getPullRequestDiffAPI({ owner, repo, pull_number }),
+      getPullRequestDiff({ owner, repo, pull_number }),
     ])
 
     // ステップ3: PR分析を実行
@@ -370,8 +370,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     // ステップ3: 全ての分析結果を取得（デフォルト）
-    const limit = parseInt(searchParams.get('limit') || '10')
-    const offset = parseInt(searchParams.get('offset') || '0')
+    const limit = parseInt(searchParams.get('limit') || '10', 10)
+    const offset = parseInt(searchParams.get('offset') || '0', 10)
 
     // 3.1: 分析結果とリレーション情報をJOINで取得（データ取得と総件数を並行実行）
     const [analyses, totalResult] = await Promise.all([

@@ -181,45 +181,35 @@ export async function getAnalysisStatistics(options?: {
   const since = options?.since || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   const until = options?.until || new Date()
 
-  // Get aggregated statistics
+  // 統計情報とリスクレベル別の件数を1回のクエリで取得
   const stats = await db
     .selectFrom('analyses')
-    .select([
-      db.fn.count('id').as('total'),
-      db.fn.avg('risk_score').as('avg_risk'),
-      db.fn.avg('complexity_score').as('avg_complexity'),
-      db.fn.avg('security_score').as('avg_security'),
+    .select((eb) => [
+      eb.fn.count('id').as('total'),
+      eb.fn.avg('risk_score').as('avg_risk'),
+      eb.fn.avg('complexity_score').as('avg_complexity'),
+      eb.fn.avg('security_score').as('avg_security'),
+      eb.fn.count('id').filterWhere('risk_level', '=', 'low').as('low_count'),
+      eb.fn.count('id').filterWhere('risk_level', '=', 'medium').as('medium_count'),
+      eb.fn.count('id').filterWhere('risk_level', '=', 'high').as('high_count'),
+      eb.fn.count('id').filterWhere('risk_level', '=', 'critical').as('critical_count'),
+
     ])
     .where('analyzed_at', '>=', since)
     .where('analyzed_at', '<=', until)
     .executeTakeFirst()
-
-  // Get risk level counts
-  const riskCounts = await db
-    .selectFrom('analyses')
-    .select(['risk_level', db.fn.count('id').as('count')])
-    .where('analyzed_at', '>=', since)
-    .where('analyzed_at', '<=', until)
-    .groupBy('risk_level')
-    .execute()
-
-  const riskLevelCounts = {
-    low: 0,
-    medium: 0,
-    high: 0,
-    critical: 0,
-  }
-
-  riskCounts.forEach((row) => {
-    riskLevelCounts[row.risk_level] = Number(row.count)
-  })
 
   return {
     total: Number(stats?.total || 0),
     averageRiskScore: Number(stats?.avg_risk || 0),
     averageComplexityScore: Number(stats?.avg_complexity || 0),
     averageSecurityScore: Number(stats?.avg_security || 0),
-    riskLevelCounts,
+    riskLevelCounts: {
+      low: Number(stats?.low_count || 0),
+      medium: Number(stats?.medium_count || 0),
+      high: Number(stats?.high_count || 0),
+      critical: Number(stats?.critical_count || 0),
+    },
   }
 }
 

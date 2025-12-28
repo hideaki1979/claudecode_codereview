@@ -79,23 +79,11 @@ export async function createSecurityFindings(
     return []
   }
 
-  // Validate all findings
-  const validationErrors: string[] = []
-  for (let i = 0; i < findings.length; i++) {
-    const parseResult = newSecurityFindingSchema.safeParse(findings[i])
-    if (!parseResult.success) {
-      const validationError = fromZodError(parseResult.error)
-      validationErrors.push(`[${i}]: ${validationError.message}`)
-    }
-  }
-
-  if (validationErrors.length > 0) {
-    throw new Error(
-      `Invalid security findings data:\n${validationErrors.slice(0, 5).join('\n')}` +
-        (validationErrors.length > 5
-          ? `\n...and ${validationErrors.length - 5} more errors`
-          : '')
-    )
+  // Validate all findings at once using Zod's array validation
+  const parseResult = z.array(newSecurityFindingSchema).safeParse(findings)
+  if (!parseResult.success) {
+    const validationError = fromZodError(parseResult.error)
+    throw new Error(`Invalid security findings data: ${validationError.message}`)
   }
 
   try {
