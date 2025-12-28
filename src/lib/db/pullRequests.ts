@@ -8,7 +8,7 @@
 import { db } from './kysely'
 import { z } from 'zod'
 import { fromZodError } from 'zod-validation-error'
-import type { PullRequest, NewPullRequest } from './types'
+import type { PullRequest, NewPullRequest, DatabaseExecutor } from './types'
 
 /**
  * Input validation schema for new pull requests
@@ -60,13 +60,15 @@ export async function findPullRequestById(
  *
  * @param repositoryId - Repository UUID
  * @param number - GitHub PR number
+ * @param executor - Optional database executor for transaction support
  * @returns Pull request if found, undefined otherwise
  */
 export async function findPullRequestByNumber(
   repositoryId: string,
-  number: number
+  number: number,
+  executor: DatabaseExecutor = db
 ): Promise<PullRequest | undefined> {
-  return await db
+  return await executor
     .selectFrom('pull_requests')
     .selectAll()
     .where('repository_id', '=', repositoryId)
@@ -81,11 +83,13 @@ export async function findPullRequestByNumber(
  * Idempotent: returns existing PR unchanged or creates new one.
  *
  * @param pullRequest - PR data
+ * @param executor - Optional database executor for transaction support
  * @returns Existing or newly created pull request
  * @throws {Error} If input validation fails or database operation fails
  */
 export async function findOrCreatePullRequest(
-  pullRequest: NewPullRequest
+  pullRequest: NewPullRequest,
+  executor: DatabaseExecutor = db
 ): Promise<PullRequest> {
   // Input validation
   const parseResult = newPullRequestSchema.safeParse(pullRequest)
@@ -97,7 +101,7 @@ export async function findOrCreatePullRequest(
   try {
     // Atomic upsert using ON CONFLICT
     // Uses unique constraint: pull_requests_repo_number_unique (repository_id, number)
-    const result = await db
+    const result = await executor
       .insertInto('pull_requests')
       .values(pullRequest)
       .onConflict((oc) =>
@@ -116,7 +120,8 @@ export async function findOrCreatePullRequest(
     // If conflict occurred (doNothing), fetch the existing record
     const existing = await findPullRequestByNumber(
       pullRequest.repository_id,
-      pullRequest.number
+      pullRequest.number,
+      executor
     )
 
     if (!existing) {

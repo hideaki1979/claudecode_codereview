@@ -14,9 +14,9 @@ import { getPullRequest } from '@/lib/github/pullRequests'
 import { getPullRequestDiffAPI } from '@/lib/api-client'
 import { analyzePullRequest } from '@/lib/analysis'
 import { db } from '@/lib/db/kysely'
-import { findOrCreateRepository, findRepositoryByOwnerAndName } from '@/lib/db/repositories'
-import { findOrCreatePullRequest, findPullRequestByNumber } from '@/lib/db/pullRequests'
-import { createAnalysis, findLatestAnalysisByPrId } from '@/lib/db/analyses'
+import { findOrCreateRepository } from '@/lib/db/repositories'
+import { findOrCreatePullRequest } from '@/lib/db/pullRequests'
+import { createAnalysis } from '@/lib/db/analyses'
 import { createSecurityFindings, listSecurityFindingsByAnalysisId, listSecurityFindingsByAnalysisIds } from '@/lib/db/securityFindings'
 import type { AnalysisData } from '@/types/analysis'
 import type { Database } from '@/lib/db/types'
@@ -149,34 +149,41 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const analysisData = analysisResult.data
 
-    // ステップ4: データベースに保存（トランザクション不要 - 外部キー制約で整合性保証）
-    // 4.1: Repository を findOrCreate
-    const repository = await findOrCreateRepository({
-      owner,
-      name: repo,
-    })
+    // ステップ4: データベースに保存（トランザクションでアトミック性を保証）
+    // 全ての書き込み操作を単一トランザクションで実行し、途中でエラーが発生した場合はロールバック
+    const savedAnalysis = await db.transaction().execute(async (trx) => {
+      // 4.1: Repository を findOrCreate
+      const repository = await findOrCreateRepository({
+        owner,
+        name: repo,
+      }, trx)
 
-    // 4.2: Pull Request を findOrCreate
-    const pullRequest = await findOrCreatePullRequest({
-      repository_id: repository.id,
-      number: pull_number,
-      title: prResult.data.title,
-      state: prResult.data.state === 'open' ? 'open' : prResult.data.merged ? 'merged' : 'closed',
-      created_at: new Date(prResult.data.created_at),
-      updated_at: new Date(prResult.data.updated_at),
-    })
+      // 4.2: Pull Request を findOrCreate
+      const pullRequest = await findOrCreatePullRequest({
+        repository_id: repository.id,
+        number: pull_number,
+        title: prResult.data.title,
+        state: prResult.data.state === 'open' ? 'open' : prResult.data.merged ? 'merged' : 'closed',
+        created_at: new Date(prResult.data.created_at),
+        updated_at: new Date(prResult.data.updated_at),
+      }, trx)
 
-    // 4.3: Analysis を作成
-    const savedAnalysis = await createAnalysis(
-      convertToAnalysisRecord(analysisData, pullRequest.id)
-    )
-
-    // 4.4: Security Findings をバッチ作成
-    if (analysisData.security.issues.length > 0) {
-      await createSecurityFindings(
-        convertToSecurityFindingRecords(analysisData.security.issues, savedAnalysis.id)
+      // 4.3: Analysis を作成
+      const analysis = await createAnalysis(
+        convertToAnalysisRecord(analysisData, pullRequest.id),
+        trx
       )
-    }
+
+      // 4.4: Security Findings をバッチ作成
+      if (analysisData.security.issues.length > 0) {
+        await createSecurityFindings(
+          convertToSecurityFindingRecords(analysisData.security.issues, analysis.id),
+          trx
+        )
+      }
+
+      return analysis
+    })
 
     // ステップ5: 成功レスポンスを返却
     return NextResponse.json(
@@ -251,12 +258,48 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const { owner, repo, pull_number } = validation.data
 
-    // ステップ2: 特定のPRの分析結果を取得
+    // ステップ2: 特定のPRの分析結果を取得（JOINで効率化: 4クエリ → 2クエリ）
     if (owner && repo && pull_number) {
-      // 2.1: Repository を検索
-      const repository = await findRepositoryByOwnerAndName(owner, repo)
+      // 2.1: Repository + PullRequest + Analysis を単一クエリで取得
+      // LEFT JOINを使用して、どのエンティティが存在しないかを判別可能にする
+      const prNumber = parseInt(pull_number)
+      const result = await db
+        .selectFrom('repositories as r')
+        .leftJoin('pull_requests as pr', (join) =>
+          join
+            .onRef('pr.repository_id', '=', 'r.id')
+            .on('pr.number', '=', prNumber)
+        )
+        .leftJoin('analyses as a', 'a.pr_id', 'pr.id')
+        .select([
+          // Repository fields
+          'r.id as repo_id',
+          'r.owner as repo_owner',
+          'r.name as repo_name',
+          // PullRequest fields (nullable due to LEFT JOIN)
+          'pr.id as pr_id',
+          'pr.number as pr_number',
+          'pr.title as pr_title',
+          'pr.state as pr_state',
+          // Analysis fields (nullable due to LEFT JOIN)
+          'a.id as analysis_id',
+          'a.risk_score',
+          'a.risk_level',
+          'a.complexity_score',
+          'a.complexity_level',
+          'a.security_score',
+          'a.lines_changed',
+          'a.files_changed',
+          'a.analyzed_at',
+        ])
+        .where('r.owner', '=', owner)
+        .where('r.name', '=', repo)
+        .orderBy('a.analyzed_at', 'desc')
+        .limit(1)
+        .executeTakeFirst()
 
-      if (!repository) {
+      // 2.2: 存在チェック（どのエンティティが不足かを明確に判別）
+      if (!result) {
         return NextResponse.json(
           {
             success: false,
@@ -267,10 +310,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         )
       }
 
-      // 2.2: Pull Request を検索
-      const pullRequest = await findPullRequestByNumber(repository.id, parseInt(pull_number))
-
-      if (!pullRequest) {
+      if (!result.pr_id) {
         return NextResponse.json(
           {
             success: false,
@@ -281,10 +321,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         )
       }
 
-      // 2.3: 最新の分析結果を取得
-      const analysis = await findLatestAnalysisByPrId(pullRequest.id)
-
-      if (!analysis) {
+      if (!result.analysis_id) {
         return NextResponse.json(
           {
             success: false,
@@ -295,35 +332,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         )
       }
 
-      // 2.4: セキュリティ検出を取得
-      const securityFindings = await listSecurityFindingsByAnalysisId(analysis.id)
+      // 2.3: セキュリティ検出を取得（2クエリ目）
+      const securityFindings = await listSecurityFindingsByAnalysisId(result.analysis_id)
 
-      // 2.5: レスポンスを返却
+      // 2.4: レスポンスを返却
       return NextResponse.json(
         {
           success: true,
           data: {
             repository: {
-              id: repository.id,
-              owner: repository.owner,
-              name: repository.name,
+              id: result.repo_id,
+              owner: result.repo_owner,
+              name: result.repo_name,
             },
             pullRequest: {
-              id: pullRequest.id,
-              number: pullRequest.number,
-              title: pullRequest.title,
-              state: pullRequest.state,
+              id: result.pr_id,
+              number: result.pr_number,
+              title: result.pr_title,
+              state: result.pr_state,
             },
             analysis: {
-              id: analysis.id,
-              risk_score: analysis.risk_score,
-              risk_level: analysis.risk_level,
-              complexity_score: analysis.complexity_score,
-              complexity_level: analysis.complexity_level,
-              security_score: analysis.security_score,
-              lines_changed: analysis.lines_changed,
-              files_changed: analysis.files_changed,
-              analyzed_at: analysis.analyzed_at,
+              id: result.analysis_id,
+              risk_score: result.risk_score,
+              risk_level: result.risk_level,
+              complexity_score: result.complexity_score,
+              complexity_level: result.complexity_level,
+              security_score: result.security_score,
+              lines_changed: result.lines_changed,
+              files_changed: result.files_changed,
+              analyzed_at: result.analyzed_at,
             },
             security_findings: securityFindings,
           },
@@ -418,7 +455,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         success: false,
         error: 'Internal server error',
         code: 'INTERNAL_SERVER_ERROR',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        // 本番環境ではdetailsを省略、開発環境のみ詳細を含める
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error instanceof Error ? error.message : 'Unknown error',
+        }),
       },
       { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
     )

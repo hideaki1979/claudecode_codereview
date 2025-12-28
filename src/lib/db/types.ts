@@ -16,7 +16,9 @@ import {
   ColumnType,
   Generated,
   Insertable,
+  Kysely,
   Selectable,
+  Transaction,
   Updateable,
 } from 'kysely'
 
@@ -102,3 +104,21 @@ export interface Database {
   analyses: AnalysisTable
   security_findings: SecurityFindingTable
 }
+
+/**
+ * Database executor type for transaction support
+ *
+ * Use this type for functions that can optionally run within a transaction.
+ * Both Kysely<Database> and Transaction<Database> are compatible with this type.
+ *
+ * @example
+ * ```typescript
+ * export async function createAnalysis(
+ *   analysis: NewAnalysis,
+ *   executor: DatabaseExecutor = db
+ * ): Promise<Analysis> {
+ *   return await executor.insertInto('analyses').values(analysis).execute()
+ * }
+ * ```
+ */
+export type DatabaseExecutor = Kysely<Database> | Transaction<Database>

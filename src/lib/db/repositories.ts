@@ -8,7 +8,7 @@
 import { db } from './kysely'
 import { z } from 'zod'
 import { fromZodError } from 'zod-validation-error'
-import type { Repository, NewRepository } from './types'
+import type { Repository, NewRepository, DatabaseExecutor } from './types'
 
 /**
  * Input validation schema for new repositories
@@ -64,13 +64,15 @@ export async function findRepositoryById(
  *
  * @param owner - Repository owner (GitHub username or organization)
  * @param name - Repository name
+ * @param executor - Optional database executor for transaction support
  * @returns Repository if found, undefined otherwise
  */
 export async function findRepositoryByOwnerAndName(
   owner: string,
-  name: string
+  name: string,
+  executor: DatabaseExecutor = db
 ): Promise<Repository | undefined> {
-  return await db
+  return await executor
     .selectFrom('repositories')
     .selectAll()
     .where('owner', '=', owner)
@@ -86,11 +88,13 @@ export async function findRepositoryByOwnerAndName(
  * Useful for ensuring repository exists before creating related records.
  *
  * @param repository - Repository data (owner and name)
+ * @param executor - Optional database executor for transaction support
  * @returns Existing or newly created repository
  * @throws {Error} If input validation fails or database operation fails
  */
 export async function findOrCreateRepository(
-  repository: NewRepository
+  repository: NewRepository,
+  executor: DatabaseExecutor = db
 ): Promise<Repository> {
   // Input validation
   const parseResult = newRepositorySchema.safeParse(repository)
@@ -102,7 +106,7 @@ export async function findOrCreateRepository(
   try {
     // Atomic upsert using ON CONFLICT
     // Uses unique constraint: repositories_owner_name_unique (owner, name)
-    const result = await db
+    const result = await executor
       .insertInto('repositories')
       .values(repository)
       .onConflict((oc) =>
@@ -121,7 +125,8 @@ export async function findOrCreateRepository(
     // If conflict occurred (doNothing), fetch the existing record
     const existing = await findRepositoryByOwnerAndName(
       repository.owner,
-      repository.name
+      repository.name,
+      executor
     )
 
     if (!existing) {

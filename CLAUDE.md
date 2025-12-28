@@ -112,7 +112,7 @@ Main tables:
 
 - **At-rest encryption**: Vercel Postgres provides automatic encryption at rest (AES-256)
 - **In-transit encryption**: All database connections use TLS
-- **Application-level encryption**: Not required for security_findings due to database-level protection
+- **Application-level encryption**: Not required for security_findings due to at-rest encryption provided by the database service
 
 Note: If self-hosting PostgreSQL without encryption at rest, consider enabling PostgreSQL TDE or application-level encryption for sensitive fields (message, snippet).
 

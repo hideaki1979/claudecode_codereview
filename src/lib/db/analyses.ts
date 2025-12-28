@@ -8,7 +8,7 @@
 import { db } from './kysely'
 import { z } from 'zod'
 import { fromZodError } from 'zod-validation-error'
-import type { Analysis, NewAnalysis } from './types'
+import type { Analysis, NewAnalysis, DatabaseExecutor } from './types'
 
 /**
  * Input validation schema for new analyses
@@ -29,11 +29,13 @@ const newAnalysisSchema = z.object({
  * Create a new analysis record
  *
  * @param analysis - Analysis data
+ * @param executor - Optional database executor for transaction support
  * @returns Created analysis with generated id
  * @throws {Error} If input validation fails or database operation fails
  */
 export async function createAnalysis(
-  analysis: NewAnalysis
+  analysis: NewAnalysis,
+  executor: DatabaseExecutor = db
 ): Promise<Analysis> {
   // Input validation
   const parseResult = newAnalysisSchema.safeParse(analysis)
@@ -43,7 +45,7 @@ export async function createAnalysis(
   }
 
   try {
-    return await db
+    return await executor
       .insertInto('analyses')
       .values(analysis)
       .returningAll()

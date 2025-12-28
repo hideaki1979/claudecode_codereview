@@ -8,7 +8,7 @@
 import { db } from './kysely'
 import { z } from 'zod'
 import { fromZodError } from 'zod-validation-error'
-import type { SecurityFinding, NewSecurityFinding } from './types'
+import type { SecurityFinding, NewSecurityFinding, DatabaseExecutor } from './types'
 
 /**
  * Input validation schema for new security findings
@@ -67,11 +67,13 @@ export async function createSecurityFinding(
  * Automatically splits large arrays into batches to avoid PostgreSQL parameter limits.
  *
  * @param findings - Array of security finding data
+ * @param executor - Optional database executor for transaction support
  * @returns Array of created security findings with generated ids
  * @throws {Error} If input validation fails or database operation fails
  */
 export async function createSecurityFindings(
-  findings: NewSecurityFinding[]
+  findings: NewSecurityFinding[],
+  executor: DatabaseExecutor = db
 ): Promise<SecurityFinding[]> {
   if (findings.length === 0) {
     return []
@@ -99,7 +101,7 @@ export async function createSecurityFindings(
   try {
     // Split into batches if necessary
     if (findings.length <= BATCH_SIZE) {
-      return await db
+      return await executor
         .insertInto('security_findings')
         .values(findings)
         .returningAll()
@@ -110,7 +112,7 @@ export async function createSecurityFindings(
     const results: SecurityFinding[] = []
     for (let i = 0; i < findings.length; i += BATCH_SIZE) {
       const batch = findings.slice(i, i + BATCH_SIZE)
-      const batchResults = await db
+      const batchResults = await executor
         .insertInto('security_findings')
         .values(batch)
         .returningAll()
