@@ -110,6 +110,9 @@ Code Review Dashboardは現在、以下の構成で動作しています：
 ```typescript
 // Kyselyの強み：複雑な集計クエリが型安全に書ける
 export async function getDailyRiskTrend(repositoryId: string, days: number = 30) {
+  // ✅ SECURE: JavaScriptで日付計算（sql.raw()のインジェクションリスクを回避）
+  const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
   return await db
     .selectFrom('analyses as a')
     .innerJoin('pull_requests as pr', 'pr.id', 'a.pr_id')
@@ -121,7 +124,7 @@ export async function getDailyRiskTrend(repositoryId: string, days: number = 30)
       sql<number>`SUM(CASE WHEN a.risk_level = 'critical' THEN 1 ELSE 0 END)`.as('critical_count')
     ])
     .where('pr.repository_id', '=', repositoryId)
-    .where('a.analyzed_at', '>=', sql`CURRENT_DATE - INTERVAL '${sql.raw(days.toString())} days'`)
+    .where('a.analyzed_at', '>=', sinceDate)
     .groupBy(sql`DATE(a.analyzed_at)`)
     .orderBy('date', 'desc')
     .execute()
@@ -377,31 +380,31 @@ export const db = new Kysely<Database>({
 
 #### ステップ1: Docker環境構築（1日）
 
-- [ ] `docker-compose.yml` 作成
-- [ ] PostgreSQL 16 + pgAdmin セットアップ
-- [ ] ヘルスチェック設定
-- [ ] 環境変数設定（`.env.local`）
+- [x] `docker-compose.yml` 作成
+- [x] PostgreSQL 16 + pgAdmin セットアップ
+- [x] ヘルスチェック設定
+- [x] 環境変数設定（`.env.local`）
 
 #### ステップ2: Kysely統合（2-3日）
 
-- [ ] 依存関係インストール（`kysely`, `pg`, `@vercel/postgres`）
-- [ ] 型定義作成（`src/lib/db/types.ts`）
-- [ ] Kyselyクライアント作成（`src/lib/db/kysely.ts`）
-- [ ] マイグレーションシステム構築
+- [x] 依存関係インストール（`kysely`, `pg`, `@vercel/postgres`）
+- [x] 型定義作成（`src/lib/db/types.ts`）
+- [x] Kyselyクライアント作成（`src/lib/db/kysely.ts`）
+- [x] マイグレーションシステム構築
 
 #### ステップ3: スキーマ実装（2-3日）
 
-- [ ] `migrations/001_initial_schema.ts` 作成
-- [ ] テーブル作成スクリプト実装
-- [ ] インデックス設定
+- [x] `migrations/001_initial_schema.ts` 作成
+- [x] テーブル作成スクリプト実装
+- [x] インデックス設定
 - [ ] マイグレーション実行・検証
 
 #### ステップ4: 基本CRUD実装（3-4日）
 
-- [ ] リポジトリ管理関数（`src/lib/db/repositories.ts`）
-- [ ] PR管理関数（`src/lib/db/pullRequests.ts`）
-- [ ] 分析結果保存関数（`src/lib/db/analyses.ts`）
-- [ ] セキュリティ検出保存関数（`src/lib/db/securityFindings.ts`）
+- [x] リポジトリ管理関数（`src/lib/db/repositories.ts`）
+- [x] PR管理関数（`src/lib/db/pullRequests.ts`）
+- [x] 分析結果保存関数（`src/lib/db/analyses.ts`）
+- [x] セキュリティ検出保存関数（`src/lib/db/securityFindings.ts`）
 
 **成果物**:
 - ローカルで動作するPostgreSQL環境
@@ -414,17 +417,17 @@ export const db = new Kysely<Database>({
 
 #### ステップ1: 分析パイプライン統合（3-4日）
 
-- [ ] `src/app/api/reviews/route.ts` 修正
-- [ ] 分析結果の自動保存
+- [x] `src/app/api/analysis/route.ts` 作成（POST/GETエンドポイント）
+- [x] 分析結果の自動保存（POST時にDB保存）
 - [ ] キャッシュロジック実装
-- [ ] エラーハンドリング強化
+- [x] エラーハンドリング強化（バリデーション、GitHubエラー、DB エラー）
 
 #### ステップ2: ダッシュボード改修（2-3日）
 
-- [ ] `DashboardContent.tsx` データ取得先変更
-- [ ] キャッシュ戦略実装（SWR or React Query）
-- [ ] ローディング状態改善
-- [ ] エラー表示改善
+- [x] `DashboardContent.tsx` データ取得先変更（分析APIを使用）
+- [ ] キャッシュ戦略実装（SWR or React Query）※カスタムフック`usePullRequests`で基本機能は実装済み
+- [x] ローディング状態改善
+- [x] エラー表示改善
 
 **成果物**:
 - 分析結果がDBに永続化される

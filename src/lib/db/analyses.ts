@@ -1,0 +1,231 @@
+/**
+ * Analysis management functions
+ *
+ * CRUD operations for the analyses table.
+ * Handles PR analysis results storage and retrieval.
+ */
+
+import { db } from './kysely'
+import { z } from 'zod'
+import { fromZodError } from 'zod-validation-error'
+import type { Analysis, NewAnalysis, DatabaseExecutor } from './types'
+
+/**
+ * Input validation schema for new analyses
+ */
+const newAnalysisSchema = z.object({
+  pr_id: z.string().uuid('pr_id must be a valid UUID'),
+  risk_score: z.number().min(0).max(100),
+  risk_level: z.enum(['low', 'medium', 'high', 'critical']),
+  complexity_score: z.number().min(0).max(100),
+  complexity_level: z.enum(['low', 'medium', 'high']),
+  lines_changed: z.number().int().min(0),
+  files_changed: z.number().int().min(0),
+  security_score: z.number().min(0).max(100),
+  analyzed_at: z.date(),
+})
+
+/**
+ * Create a new analysis record
+ *
+ * @param analysis - Analysis data
+ * @param executor - Optional database executor for transaction support
+ * @returns Created analysis with generated id
+ * @throws {Error} If input validation fails or database operation fails
+ */
+export async function createAnalysis(
+  analysis: NewAnalysis,
+  executor: DatabaseExecutor = db
+): Promise<Analysis> {
+  // Input validation
+  const parseResult = newAnalysisSchema.safeParse(analysis)
+  if (!parseResult.success) {
+    const validationError = fromZodError(parseResult.error)
+    throw new Error(`Invalid analysis data: ${validationError.message}`)
+  }
+
+  try {
+    return await executor
+      .insertInto('analyses')
+      .values(analysis)
+      .returningAll()
+      .executeTakeFirstOrThrow()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    throw new Error(`Database error in createAnalysis: ${message}`)
+  }
+}
+
+/**
+ * Find analysis by ID
+ *
+ * @param id - Analysis UUID
+ * @returns Analysis if found, undefined otherwise
+ */
+export async function findAnalysisById(
+  id: string
+): Promise<Analysis | undefined> {
+  return await db
+    .selectFrom('analyses')
+    .selectAll()
+    .where('id', '=', id)
+    .executeTakeFirst()
+}
+
+/**
+ * Find latest analysis for a pull request
+ *
+ * @param prId - Pull request UUID
+ * @returns Latest analysis if found, undefined otherwise
+ */
+export async function findLatestAnalysisByPrId(
+  prId: string
+): Promise<Analysis | undefined> {
+  return await db
+    .selectFrom('analyses')
+    .selectAll()
+    .where('pr_id', '=', prId)
+    .orderBy('analyzed_at', 'desc')
+    .executeTakeFirst()
+}
+
+/**
+ * List all analyses for a pull request
+ *
+ * @param prId - Pull request UUID
+ * @param options - Query options
+ * @param options.limit - Maximum number of results (default: 100)
+ * @param options.offset - Number of results to skip (default: 0)
+ * @returns Array of analyses ordered by analyzed_at DESC
+ */
+export async function listAnalysesByPrId(
+  prId: string,
+  options?: {
+    limit?: number
+    offset?: number
+  }
+): Promise<Analysis[]> {
+  const { limit = 100, offset = 0 } = options || {}
+
+  return await db
+    .selectFrom('analyses')
+    .selectAll()
+    .where('pr_id', '=', prId)
+    .orderBy('analyzed_at', 'desc')
+    .limit(limit)
+    .offset(offset)
+    .execute()
+}
+
+/**
+ * List analyses by risk level
+ *
+ * Useful for dashboards showing high-risk PRs.
+ *
+ * @param riskLevel - Risk level filter
+ * @param options - Query options
+ * @param options.limit - Maximum number of results (default: 100)
+ * @param options.offset - Number of results to skip (default: 0)
+ * @param options.since - Only include analyses after this date
+ * @returns Array of analyses ordered by analyzed_at DESC
+ */
+export async function listAnalysesByRiskLevel(
+  riskLevel: 'low' | 'medium' | 'high' | 'critical',
+  options?: {
+    limit?: number
+    offset?: number
+    since?: Date
+  }
+): Promise<Analysis[]> {
+  const { limit = 100, offset = 0, since } = options || {}
+
+  let query = db
+    .selectFrom('analyses')
+    .selectAll()
+    .where('risk_level', '=', riskLevel)
+
+  if (since) {
+    query = query.where('analyzed_at', '>=', since)
+  }
+
+  return await query
+    .orderBy('analyzed_at', 'desc')
+    .limit(limit)
+    .offset(offset)
+    .execute()
+}
+
+/**
+ * Get analysis statistics for a date range
+ *
+ * @param options - Query options
+ * @param options.since - Start date (default: 30 days ago)
+ * @param options.until - End date (default: now)
+ * @returns Statistics object with counts and averages
+ */
+export async function getAnalysisStatistics(options?: {
+  since?: Date
+  until?: Date
+}): Promise<{
+  total: number
+  averageRiskScore: number
+  averageComplexityScore: number
+  averageSecurityScore: number
+  riskLevelCounts: {
+    low: number
+    medium: number
+    high: number
+    critical: number
+  }
+}> {
+  const since = options?.since || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const until = options?.until || new Date()
+
+  // 統計情報とリスクレベル別の件数を1回のクエリで取得
+  const stats = await db
+    .selectFrom('analyses')
+    .select((eb) => [
+      eb.fn.count('id').as('total'),
+      eb.fn.avg('risk_score').as('avg_risk'),
+      eb.fn.avg('complexity_score').as('avg_complexity'),
+      eb.fn.avg('security_score').as('avg_security'),
+      eb.fn.count('id').filterWhere('risk_level', '=', 'low').as('low_count'),
+      eb.fn.count('id').filterWhere('risk_level', '=', 'medium').as('medium_count'),
+      eb.fn.count('id').filterWhere('risk_level', '=', 'high').as('high_count'),
+      eb.fn.count('id').filterWhere('risk_level', '=', 'critical').as('critical_count'),
+
+    ])
+    .where('analyzed_at', '>=', since)
+    .where('analyzed_at', '<=', until)
+    .executeTakeFirst()
+
+  return {
+    total: Number(stats?.total || 0),
+    averageRiskScore: Number(stats?.avg_risk || 0),
+    averageComplexityScore: Number(stats?.avg_complexity || 0),
+    averageSecurityScore: Number(stats?.avg_security || 0),
+    riskLevelCounts: {
+      low: Number(stats?.low_count || 0),
+      medium: Number(stats?.medium_count || 0),
+      high: Number(stats?.high_count || 0),
+      critical: Number(stats?.critical_count || 0),
+    },
+  }
+}
+
+/**
+ * Delete analysis by ID
+ *
+ * Cascades to related security_findings.
+ *
+ * @param id - Analysis UUID
+ * @returns Number of deleted records (0 or 1)
+ */
+export async function deleteAnalysis(id: string): Promise<number> {
+  const result = await db
+    .deleteFrom('analyses')
+    .where('id', '=', id)
+    .executeTakeFirst()
+
+  return Number(result.numDeletedRows)
+}

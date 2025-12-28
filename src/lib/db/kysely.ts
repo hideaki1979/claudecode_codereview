@@ -2,15 +2,21 @@
  * Kysely database client configuration
  *
  * This file sets up the type-safe database client using Kysely.
- * Uses @vercel/postgres Pool for optimized connection management in serverless environments.
+ * Uses pg Pool for PostgreSQL connection management.
  * Compatible with both development (Docker Compose) and production (Vercel Postgres).
  */
 
 import { Kysely, PostgresDialect } from 'kysely'
-import { Pool } from '@vercel/postgres'
+import { Pool } from 'pg'
 import { z } from 'zod'
 import { fromZodError } from 'zod-validation-error'
 import type { Database } from './types'
+
+/**
+ * PostgreSQL connection string validation regex
+ * Matches: postgres:// or postgresql:// URLs
+ */
+const postgresUrlPattern = /^postgres(ql)?:\/\/.+/
 
 /**
  * Environment variable schema for database configuration
@@ -20,11 +26,15 @@ import type { Database } from './types'
 const envSchema = z.object({
   DATABASE_URL: z
     .string()
-    .url({ message: 'DATABASE_URL must be a valid PostgreSQL connection URL' })
+    .regex(postgresUrlPattern, {
+      message: 'DATABASE_URL must be a valid PostgreSQL connection URL (postgres:// or postgresql://)',
+    })
     .optional(),
   POSTGRES_URL: z
     .string()
-    .url({ message: 'POSTGRES_URL must be a valid PostgreSQL connection URL' })
+    .regex(postgresUrlPattern, {
+      message: 'POSTGRES_URL must be a valid PostgreSQL connection URL (postgres:// or postgresql://)',
+    })
     .optional(),
 })
 
