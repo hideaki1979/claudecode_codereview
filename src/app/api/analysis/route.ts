@@ -373,33 +373,43 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // 3.1: 分析結果とリレーション情報をJOINで取得
-    const analyses = await db
-      .selectFrom('analyses')
-      .innerJoin('pull_requests', 'pull_requests.id', 'analyses.pr_id')
-      .innerJoin('repositories', 'repositories.id', 'pull_requests.repository_id')
-      .select([
-        'analyses.id as analysis_id',
-        'analyses.risk_score',
-        'analyses.risk_level',
-        'analyses.complexity_score',
-        'analyses.complexity_level',
-        'analyses.security_score',
-        'analyses.lines_changed',
-        'analyses.files_changed',
-        'analyses.analyzed_at',
-        'pull_requests.id as pr_id',
-        'pull_requests.number as pr_number',
-        'pull_requests.title as pr_title',
-        'pull_requests.state as pr_state',
-        'repositories.id as repo_id',
-        'repositories.owner as repo_owner',
-        'repositories.name as repo_name',
-      ])
-      .orderBy('analyses.analyzed_at', 'desc')
-      .limit(limit)
-      .offset(offset)
-      .execute()
+    // 3.1: 分析結果とリレーション情報をJOINで取得（データ取得と総件数を並行実行）
+    const [analyses, totalResult] = await Promise.all([
+      // データ取得クエリ
+      db
+        .selectFrom('analyses')
+        .innerJoin('pull_requests', 'pull_requests.id', 'analyses.pr_id')
+        .innerJoin('repositories', 'repositories.id', 'pull_requests.repository_id')
+        .select([
+          'analyses.id as analysis_id',
+          'analyses.risk_score',
+          'analyses.risk_level',
+          'analyses.complexity_score',
+          'analyses.complexity_level',
+          'analyses.security_score',
+          'analyses.lines_changed',
+          'analyses.files_changed',
+          'analyses.analyzed_at',
+          'pull_requests.id as pr_id',
+          'pull_requests.number as pr_number',
+          'pull_requests.title as pr_title',
+          'pull_requests.state as pr_state',
+          'repositories.id as repo_id',
+          'repositories.owner as repo_owner',
+          'repositories.name as repo_name',
+        ])
+        .orderBy('analyses.analyzed_at', 'desc')
+        .limit(limit)
+        .offset(offset)
+        .execute(),
+      // 総件数取得クエリ
+      db
+        .selectFrom('analyses')
+        .select(db.fn.count('analyses.id').as('count'))
+        .executeTakeFirstOrThrow(),
+    ])
+
+    const total = Number(totalResult.count)
 
     // 3.2: 全分析のセキュリティ検出を一括取得（N+1クエリ問題を解決）
     const analysisIds = analyses.map((row) => row.analysis_id)
@@ -442,6 +452,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             limit,
             offset,
             count: analysesWithFindings.length,
+            total,
+            totalPages: Math.ceil(total / limit),
           },
         },
       },

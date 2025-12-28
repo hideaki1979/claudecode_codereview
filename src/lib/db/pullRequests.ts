@@ -149,21 +149,19 @@ export async function findOrCreatePullRequest(
  * Update pull request
  *
  * @param id - Pull request UUID
- * @param updates - Fields to update
+ * @param updates - Fields to update (must contain at least one field)
  * @returns Updated pull request
- * @throws {Error} If pull request not found
+ * @throws {Error} If updates is empty or pull request not found
  */
 export async function updatePullRequest(
   id: string,
   updates: Partial<Omit<PullRequest, 'id' | 'repository_id' | 'number'>>
 ): Promise<PullRequest> {
+  // Fail Fast: 空のupdatesは呼び出し側のバグを示す
   if (Object.keys(updates).length === 0) {
-    const existing = await findPullRequestById(id)
-    if (!existing) {
-      throw new Error(`Pull request with id ${id} not found`)
-    }
-    return existing;
+    throw new Error('updatePullRequest was called with no update fields')
   }
+
   return await db
     .updateTable('pull_requests')
     .set(updates)

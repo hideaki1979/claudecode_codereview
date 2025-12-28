@@ -256,12 +256,15 @@ export async function searchPRs(filters: {
   if (filters.search) {
     // ✅ SECURE: Escape user input to prevent wildcard injection
     const escapedSearch = escapeLikePattern(filters.search)
-    query = query.where((eb) =>
-      eb.or([
-        eb('pr.title', 'ilike', `%${escapedSearch}%`),
-        eb('pr.number', '=', parseInt(filters.search) || 0),
-      ])
-    )
+    query = query.where((eb) => {
+      const conditions = [eb('pr.title', 'ilike', `%${escapedSearch}%`)]
+      // PR番号検索は数値の場合のみ（NaNの場合は除外して意図しない0検索を防ぐ）
+      const searchNum = parseInt(filters.search!, 10)
+      if (!isNaN(searchNum)) {
+        conditions.push(eb('pr.number', '=', searchNum))
+      }
+      return eb.or(conditions)
+    })
   }
 
   return await query
