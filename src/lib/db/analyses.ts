@@ -6,25 +6,52 @@
  */
 
 import { db } from './kysely'
-import type { Database } from './types'
+import { z } from 'zod'
+import { fromZodError } from 'zod-validation-error'
+import type { Analysis, NewAnalysis } from './types'
 
-type Analysis = Database['analyses']
-type NewAnalysis = Omit<Analysis, 'id'>
+/**
+ * Input validation schema for new analyses
+ */
+const newAnalysisSchema = z.object({
+  pr_id: z.string().uuid('pr_id must be a valid UUID'),
+  risk_score: z.number().min(0).max(100),
+  risk_level: z.enum(['low', 'medium', 'high', 'critical']),
+  complexity_score: z.number().min(0).max(100),
+  complexity_level: z.enum(['low', 'medium', 'high']),
+  lines_changed: z.number().int().min(0),
+  files_changed: z.number().int().min(0),
+  security_score: z.number().min(0).max(100),
+  analyzed_at: z.date(),
+})
 
 /**
  * Create a new analysis record
  *
  * @param analysis - Analysis data
  * @returns Created analysis with generated id
+ * @throws {Error} If input validation fails or database operation fails
  */
 export async function createAnalysis(
   analysis: NewAnalysis
 ): Promise<Analysis> {
-  return await db
-    .insertInto('analyses')
-    .values(analysis)
-    .returningAll()
-    .executeTakeFirstOrThrow()
+  // Input validation
+  const parseResult = newAnalysisSchema.safeParse(analysis)
+  if (!parseResult.success) {
+    const validationError = fromZodError(parseResult.error)
+    throw new Error(`Invalid analysis data: ${validationError.message}`)
+  }
+
+  try {
+    return await db
+      .insertInto('analyses')
+      .values(analysis)
+      .returningAll()
+      .executeTakeFirstOrThrow()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    throw new Error(`Database error in createAnalysis: ${message}`)
+  }
 }
 
 /**

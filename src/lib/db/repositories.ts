@@ -6,10 +6,25 @@
  */
 
 import { db } from './kysely'
-import type { Database } from './types'
+import { z } from 'zod'
+import { fromZodError } from 'zod-validation-error'
+import type { Repository, NewRepository } from './types'
 
-type Repository = Database['repositories']
-type NewRepository = Omit<Repository, 'id' | 'created_at'>
+/**
+ * Input validation schema for new repositories
+ */
+const newRepositorySchema = z.object({
+  owner: z
+    .string()
+    .min(1, 'owner is required')
+    .max(100, 'owner too long')
+    .regex(/^[a-zA-Z0-9_-]+$/, 'owner contains invalid characters'),
+  name: z
+    .string()
+    .min(1, 'name is required')
+    .max(100, 'name too long')
+    .regex(/^[a-zA-Z0-9._-]+$/, 'name contains invalid characters'),
+})
 
 /**
  * Create a new repository record
@@ -64,27 +79,70 @@ export async function findRepositoryByOwnerAndName(
 }
 
 /**
- * Find or create repository
+ * Find or create repository (atomic upsert)
  *
- * Idempotent operation that returns existing repository or creates new one.
+ * Uses ON CONFLICT to ensure atomic operation and prevent TOCTOU race conditions.
+ * Idempotent: returns existing repository unchanged or creates new one.
  * Useful for ensuring repository exists before creating related records.
  *
  * @param repository - Repository data (owner and name)
  * @returns Existing or newly created repository
+ * @throws {Error} If input validation fails or database operation fails
  */
 export async function findOrCreateRepository(
   repository: NewRepository
 ): Promise<Repository> {
-  const existing = await findRepositoryByOwnerAndName(
-    repository.owner,
-    repository.name
-  )
-
-  if (existing) {
-    return existing
+  // Input validation
+  const parseResult = newRepositorySchema.safeParse(repository)
+  if (!parseResult.success) {
+    const validationError = fromZodError(parseResult.error)
+    throw new Error(`Invalid repository data: ${validationError.message}`)
   }
 
-  return await createRepository(repository)
+  try {
+    // Atomic upsert using ON CONFLICT
+    // Uses unique constraint: repositories_owner_name_unique (owner, name)
+    const result = await db
+      .insertInto('repositories')
+      .values(repository)
+      .onConflict((oc) =>
+        oc
+          .columns(['owner', 'name'])
+          .doNothing()
+      )
+      .returningAll()
+      .executeTakeFirst()
+
+    // If insert succeeded, return the new record
+    if (result) {
+      return result
+    }
+
+    // If conflict occurred (doNothing), fetch the existing record
+    const existing = await findRepositoryByOwnerAndName(
+      repository.owner,
+      repository.name
+    )
+
+    if (!existing) {
+      throw new Error(
+        `Failed to find or create repository: ${repository.owner}/${repository.name}`
+      )
+    }
+
+    return existing
+  } catch (error) {
+    // Re-throw validation errors as-is
+    if (error instanceof Error && error.message.startsWith('Invalid repository data:')) {
+      throw error
+    }
+
+    // Wrap database errors with context
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    throw new Error(
+      `Database error in findOrCreateRepository: ${message}`
+    )
+  }
 }
 
 /**

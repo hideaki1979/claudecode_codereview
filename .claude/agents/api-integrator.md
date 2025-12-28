@@ -280,6 +280,50 @@ export async function getCachedPR(owner: string, repo: string, pull_number: numb
 
 **Exponential Backoff for Retries**
 ```typescript
+import { RequestError } from '@octokit/request-error'
+
+/**
+ * Determines if an error is retryable based on HTTP status codes
+ * - 429: Rate limit exceeded
+ * - 500, 502, 503, 504: Server errors
+ * - Network errors: timeout, connection reset, etc.
+ */
+function isRetryableError(error: unknown): boolean {
+  // Octokit's RequestError with retryable status codes
+  if (error instanceof RequestError) {
+    const retryableStatusCodes = [429, 500, 502, 503, 504]
+    return retryableStatusCodes.includes(error.status)
+  }
+
+  // Network errors (Node.js error codes)
+  if (error instanceof Error) {
+    const networkErrorCodes = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND']
+    const errorCode = (error as NodeJS.ErrnoException).code
+    if (errorCode && networkErrorCodes.includes(errorCode)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Extracts retry delay from rate limit headers if available
+ */
+function getRetryDelay(error: unknown, baseDelay: number, attempt: number): number {
+  if (error instanceof RequestError && error.status === 429) {
+    // Use Retry-After header if available
+    const retryAfter = error.response?.headers?.['retry-after']
+    if (retryAfter) {
+      return parseInt(retryAfter, 10) * 1000
+    }
+  }
+  // Exponential backoff with jitter
+  const exponentialDelay = baseDelay * Math.pow(2, attempt)
+  const jitter = Math.random() * 1000
+  return exponentialDelay + jitter
+}
+
 async function fetchWithRetry<T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
@@ -290,13 +334,12 @@ async function fetchWithRetry<T>(
       return await fn()
     } catch (error) {
       const isLastAttempt = attempt === maxRetries - 1
-      const isRetryable = error instanceof Error && error.message.includes('timeout')
 
-      if (isLastAttempt || !isRetryable) {
+      if (isLastAttempt || !isRetryableError(error)) {
         throw error
       }
 
-      const delay = baseDelay * Math.pow(2, attempt)
+      const delay = getRetryDelay(error, baseDelay, attempt)
       console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`)
       await new Promise(resolve => setTimeout(resolve, delay))
     }

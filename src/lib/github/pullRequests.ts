@@ -7,6 +7,7 @@ import {
   parseLinkHeader,
   extractRateLimit,
 } from './utils';
+import { withRetry, defaultRetryLogger } from './retry';
 import { rateLimitMonitor } from '../rateLimit';
 import type {
   GitHubPullRequest,
@@ -64,17 +65,24 @@ export async function listPullRequests(
     validateRepository(owner, repo);  // リポジトリ情報の妥当性チェック
     validatePagination(per_page, page); // ページング情報のチェック
 
-    const response = await octokit.rest.pulls.list({
-      owner,
-      repo,
-      state,
-      head,
-      base,
-      sort,
-      direction,
-      per_page,
-      page,
-    });
+    const response = await withRetry(
+      () => octokit.rest.pulls.list({
+        owner,
+        repo,
+        state,
+        head,
+        base,
+        sort,
+        direction,
+        per_page,
+        page,
+      }),
+      {
+        maxRetries: 3,
+        baseDelay: 1000,
+        onRetry: defaultRetryLogger,
+      }
+    );
 
     // レスポンスヘッダーからページネーション情報を抽出
     const linkHeader = response.headers.link;
@@ -138,11 +146,18 @@ export async function getPullRequest(
     validateRepository(owner, repo);
     validatePullNumber(pull_number);  // PR番号の妥当性チェック
 
-    const response = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number,
-    });
+    const response = await withRetry(
+      () => octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number,
+      }),
+      {
+        maxRetries: 3,
+        baseDelay: 1000,
+        onRetry: defaultRetryLogger,
+      }
+    );
 
     // レスポンスヘッダーからレート制限情報を抽出
     const rateLimit = extractRateLimit(response.headers);

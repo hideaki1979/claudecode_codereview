@@ -59,6 +59,15 @@ export {
   extractPageNumber,
 } from './utils';
 
+// Retry utilities
+export {
+  withRetry,
+  isRetryableError,
+  calculateRetryDelay,
+  defaultRetryLogger,
+} from './retry';
+export type { RetryOptions } from './retry';
+
 // Type exports
 export type {
   GitHubUser,

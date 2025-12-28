@@ -150,6 +150,9 @@ export async function getDailyRiskTrends(
   repositoryId: string,
   days: number = 30
 ): Promise<RiskTrendData[]> {
+  // ✅ SECURE: Calculate date in JavaScript to avoid sql.raw() injection risk
+  const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
   return await db
     .selectFrom('analyses as a')
     .innerJoin('pull_requests as pr', 'pr.id', 'a.pr_id')
@@ -159,7 +162,7 @@ export async function getDailyRiskTrends(
       sql<number>\`COUNT(DISTINCT pr.id)\`.as('pr_count'),
     ])
     .where('pr.repository_id', '=', repositoryId)
-    .where('a.analyzed_at', '>=', sql\`CURRENT_DATE - INTERVAL '\${sql.raw(days.toString())} days'\`)
+    .where('a.analyzed_at', '>=', sinceDate)
     .groupBy(sql\`DATE(a.analyzed_at)\`)
     .orderBy('date', 'desc')
     .execute()
@@ -190,7 +193,10 @@ CREATE INDEX idx_pr_repository
 ## Migration Plan (if schema changes needed)
 \`\`\`typescript
 // Migration: 002_add_risk_trend_indexes.ts
-export async function up(db: Kysely<any>): Promise<void> {
+import { Kysely } from 'kysely'
+import type { Database } from '../src/lib/db/types'
+
+export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .createIndex('idx_analyses_pr_analyzed')
     .on('analyses')
@@ -198,7 +204,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .execute()
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<Database>): Promise<void> {
   await db.schema
     .dropIndex('idx_analyses_pr_analyzed')
     .execute()
@@ -273,16 +279,19 @@ for (const analysis of analyses) {
 
 ### Migration Patterns
 
-**✅ Good: Reversible and safe**
+**✅ Good: Type-safe, reversible and safe**
 ```typescript
-export async function up(db: Kysely<any>) {
+import { Kysely } from 'kysely'
+import type { Database } from '../src/lib/db/types'
+
+export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .alterTable('analyses')
     .addColumn('complexity_level', 'text')
     .execute()
 }
 
-export async function down(db: Kysely<any>) {
+export async function down(db: Kysely<Database>): Promise<void> {
   await db.schema
     .alterTable('analyses')
     .dropColumn('complexity_level')

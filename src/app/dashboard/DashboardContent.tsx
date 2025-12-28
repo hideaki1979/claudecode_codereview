@@ -9,13 +9,15 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { usePullRequests } from '@/hooks/usePullRequests';
-// API client for analysis endpoint
-async function runAnalysisAPI(params: {
-  owner: string;
-  repo: string;
-  pull_number: number;
-  signal?: AbortSignal;
-}): Promise<{
+import type {
+  ComplexityMetrics,
+  ImpactMetrics,
+  RiskAssessment,
+} from '@/types/analysis';
+import type { SecurityMetrics } from '@/lib/analysis/security';
+
+// API response type for analysis endpoint
+interface AnalysisAPIResponse {
   success: boolean;
   data?: {
     analysis: {
@@ -31,34 +33,23 @@ async function runAnalysisAPI(params: {
     };
     analyzed_at: string;
     metrics: {
-      risk: {
-        risk_score: number;
-        risk_level: 'low' | 'medium' | 'high' | 'critical';
-        factors: string[];
-      };
-      complexity: {
-        complexity_score: number;
-        complexity_level: 'low' | 'medium' | 'high' | 'critical';
-        lines_changed: number;
-        files_changed: number;
-      };
-      security: {
-        security_score: number;
-        issue_count: number;
-        issues: Array<{
-          type: string;
-          severity: 'low' | 'medium' | 'high' | 'critical';
-          message: string;
-          file?: string;
-          line?: number;
-          snippet?: string;
-        }>;
-      };
+      risk: RiskAssessment;
+      complexity: ComplexityMetrics;
+      security: SecurityMetrics;
+      impact: ImpactMetrics;
     };
   };
   error?: string;
   code?: string;
-}> {
+}
+
+// API client for analysis endpoint
+async function runAnalysisAPI(params: {
+  owner: string;
+  repo: string;
+  pull_number: number;
+  signal?: AbortSignal;
+}): Promise<AnalysisAPIResponse> {
   const response = await fetch('/api/analysis', {
     method: 'POST',
     headers: {
@@ -188,6 +179,7 @@ export function DashboardContent({
                     risk: apiResult.data.metrics.risk,
                     complexity: apiResult.data.metrics.complexity,
                     security: apiResult.data.metrics.security,
+                    impact: apiResult.data.metrics.impact,
                     analyzed_at: apiResult.data.analyzed_at,
                   },
                 } as PRWithAnalysis;

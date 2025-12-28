@@ -110,6 +110,9 @@ Code Review Dashboardは現在、以下の構成で動作しています：
 ```typescript
 // Kyselyの強み：複雑な集計クエリが型安全に書ける
 export async function getDailyRiskTrend(repositoryId: string, days: number = 30) {
+  // ✅ SECURE: JavaScriptで日付計算（sql.raw()のインジェクションリスクを回避）
+  const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
   return await db
     .selectFrom('analyses as a')
     .innerJoin('pull_requests as pr', 'pr.id', 'a.pr_id')
@@ -121,7 +124,7 @@ export async function getDailyRiskTrend(repositoryId: string, days: number = 30)
       sql<number>`SUM(CASE WHEN a.risk_level = 'critical' THEN 1 ELSE 0 END)`.as('critical_count')
     ])
     .where('pr.repository_id', '=', repositoryId)
-    .where('a.analyzed_at', '>=', sql`CURRENT_DATE - INTERVAL '${sql.raw(days.toString())} days'`)
+    .where('a.analyzed_at', '>=', sinceDate)
     .groupBy(sql`DATE(a.analyzed_at)`)
     .orderBy('date', 'desc')
     .execute()
@@ -422,9 +425,9 @@ export const db = new Kysely<Database>({
 #### ステップ2: ダッシュボード改修（2-3日）
 
 - [x] `DashboardContent.tsx` データ取得先変更（分析APIを使用）
-- [ ] キャッシュ戦略実装（SWR or React Query）
-- [ ] ローディング状態改善
-- [ ] エラー表示改善
+- [ ] キャッシュ戦略実装（SWR or React Query）※カスタムフック`usePullRequests`で基本機能は実装済み
+- [x] ローディング状態改善
+- [x] エラー表示改善
 
 **成果物**:
 - 分析結果がDBに永続化される

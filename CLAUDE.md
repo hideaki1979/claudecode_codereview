@@ -87,22 +87,37 @@ Read these files when working on related features.
 
 ## Database Schema
 
-We use SQLite for development. Connection details in `.env.local`:
+PostgreSQL database with Kysely query builder. Connection details in `.env.local`:
 
 ```bash
-DATABASE_URL="file:./dev.db"
+# Development (Docker Compose)
+DATABASE_URL="postgresql://user:password@localhost:5432/codereview"
+
+# Production (Vercel Postgres)
+POSTGRES_URL="postgres://..."
+
 GITHUB_TOKEN="your_token_here"
 ```
 
 Main tables:
 
+- `repositories` - GitHub repository metadata
 - `pull_requests` - PR metadata
-- `reviews` - Review results
+- `analyses` - Analysis results (risk score, complexity, etc.)
 - `security_findings` - Security vulnerability records
 
-## Notes
+## Security
+
+### Data Encryption
+
+- **At-rest encryption**: Vercel Postgres provides automatic encryption at rest (AES-256)
+- **In-transit encryption**: All database connections use TLS
+- **Application-level encryption**: Not required for security_findings due to database-level protection
+
+Note: If self-hosting PostgreSQL without encryption at rest, consider enabling PostgreSQL TDE or application-level encryption for sensitive fields (message, snippet).
+
+### Other Security Notes
 
 - Never commit `.env.local`
 - Run `npm run lint` before committing
-- Security findings must be encrypted before storage
 - All API routes require authentication

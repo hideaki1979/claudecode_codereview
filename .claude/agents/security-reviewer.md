@@ -60,11 +60,44 @@ const query = sql.raw(`SELECT * FROM users WHERE email = '${userInput}'`)
 // ❌ INSECURE: String interpolation in sql.raw()
 const interval = sql.raw(`INTERVAL '${days} days'`)  // Injection risk if 'days' is user input
 
-// ✅ SECURE: Use sql.raw() only for static SQL fragments
-const interval = sql.raw(`INTERVAL '${sql.raw(days.toString())} days'`)  // Safe if days is validated number
+// ✅ SECURE: Calculate dates in JavaScript instead of using sql.raw()
+const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+const result = await db
+  .selectFrom('analyses')
+  .where('analyzed_at', '>=', sinceDate)  // Type-safe, no injection risk
+  .execute()
 ```
 
+#### LIKE Pattern Wildcard Injection Prevention
+
+```typescript
+// ❌ INSECURE: User input with unescaped LIKE wildcards
+const searchTerm = userInput  // Could contain %, _, or \
+const results = await db
+  .selectFrom('users')
+  .where('name', 'ilike', `%${searchTerm}%`)  // Wildcard injection risk
+  .execute()
+
+// ✅ SECURE: Escape LIKE pattern special characters
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_\\]/g, '\\$&')
+}
+
+const searchTerm = escapeLikePattern(userInput)
+const results = await db
+  .selectFrom('users')
+  .where('name', 'ilike', `%${searchTerm}%`)  // Safe: wildcards escaped
+  .execute()
+```
+
+**Why this matters:**
+- `%` matches any sequence of characters
+- `_` matches any single character
+- Without escaping, user input like `100%` or `test_` causes unintended matches
+- This is not SQL injection, but can lead to information disclosure or DoS
+
 #### Type Safety Validation
+
 ```typescript
 // ✅ SECURE: Zod validation before database operations
 import { z } from 'zod'
@@ -93,6 +126,7 @@ export async function createUserUnsafe(input: any) {
 ```
 
 #### Database Constraint Enforcement
+
 ```typescript
 // ✅ SECURE: Rely on database constraints, not just application logic
 // Migration example:
@@ -108,6 +142,7 @@ await db.schema
 ```
 
 #### Safe Error Handling
+
 ```typescript
 // ✅ SECURE: Don't expose schema details in error messages
 try {
@@ -135,20 +170,26 @@ catch (error) {
 ```
 
 #### Authorization at Database Level
+
 ```typescript
-// ✅ SECURE: Row-level authorization checks
+// ✅ SECURE: Row-level authorization checks with clear separation
 export async function getUserData(userId: string, requestingUserId: string) {
+  // Step 1: Authorization check at application level
+  if (userId !== requestingUserId) {
+    throw new Error('Unauthorized: Cannot access other user data')
+  }
+
+  // Step 2: Data retrieval
   const user = await db
     .selectFrom('users')
     .selectAll()
     .where('id', '=', userId)
-    .where('id', '=', requestingUserId)  // Ensure user can only access their own data
     .executeTakeFirst()
-  
+
   if (!user) {
-    throw new Error('Unauthorized or not found')
+    throw new Error('User not found')
   }
-  
+
   return user
 }
 
@@ -164,9 +205,13 @@ export async function getUserDataUnsafe(userId: string) {
 ```
 
 #### Migration Security
+
 ```typescript
-// ✅ SECURE: Reversible migrations with validation
-export async function up(db: Kysely<any>): Promise<void> {
+import { Kysely } from 'kysely'
+import type { Database } from '../src/lib/db/types'
+
+// ✅ SECURE: Type-safe, reversible migrations with validation
+export async function up(db: Kysely<Database>): Promise<void> {
   // Add column with safe default
   await db.schema
     .alterTable('users')
@@ -174,7 +219,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .execute()
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<Database>): Promise<void> {
   // Reversible without data loss
   await db.schema
     .alterTable('users')
@@ -183,19 +228,21 @@ export async function down(db: Kysely<any>): Promise<void> {
 }
 
 // ❌ INSECURE: Irreversible migration that could cause data loss
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema.dropTable('users').execute()  // Data loss risk
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<Database>): Promise<void> {
   // Can't recover dropped data
   await db.schema.createTable('users').execute()
 }
 ```
 
 #### Vulnerability Checklist for Kysely Code
+
 - [ ] All user input is validated with Zod before database operations
 - [ ] No `sql.raw()` used with user-controlled strings
+- [ ] LIKE/ILIKE patterns escape user input (`%`, `_`, `\` characters)
 - [ ] Authorization checks at query level (not just route level)
 - [ ] Database constraints enforce data integrity (NOT NULL, UNIQUE, CHECK)
 - [ ] Error messages don't expose schema details or column names

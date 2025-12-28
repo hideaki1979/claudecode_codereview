@@ -17,7 +17,7 @@ import { db } from '@/lib/db/kysely'
 import { findOrCreateRepository, findRepositoryByOwnerAndName } from '@/lib/db/repositories'
 import { findOrCreatePullRequest, findPullRequestByNumber } from '@/lib/db/pullRequests'
 import { createAnalysis, findLatestAnalysisByPrId } from '@/lib/db/analyses'
-import { createSecurityFindings, listSecurityFindingsByAnalysisId } from '@/lib/db/securityFindings'
+import { createSecurityFindings, listSecurityFindingsByAnalysisId, listSecurityFindingsByAnalysisIds } from '@/lib/db/securityFindings'
 import type { AnalysisData } from '@/types/analysis'
 import type { Database } from '@/lib/db/types'
 import { HTTP_STATUS } from '@/types/api'
@@ -189,6 +189,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             risk: analysisData.risk,
             complexity: analysisData.complexity,
             security: analysisData.security,
+            impact: analysisData.impact,
           },
         },
       },
@@ -202,7 +203,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         success: false,
         error: 'Internal server error',
         code: 'INTERNAL_SERVER_ERROR',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        // 本番環境ではdetailsを省略、開発環境のみ詳細を含める
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error instanceof Error ? error.message : 'Unknown error',
+        }),
       },
       { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
     )
@@ -360,40 +364,38 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .offset(offset)
       .execute()
 
-    // 3.2: 各分析のセキュリティ検出を取得
-    const analysesWithFindings = await Promise.all(
-      analyses.map(async (row) => {
-        const securityFindings = await listSecurityFindingsByAnalysisId(row.analysis_id)
+    // 3.2: 全分析のセキュリティ検出を一括取得（N+1クエリ問題を解決）
+    const analysisIds = analyses.map((row) => row.analysis_id)
+    const findingsMap = await listSecurityFindingsByAnalysisIds(analysisIds)
 
-        return {
-          repository: {
-            id: row.repo_id,
-            owner: row.repo_owner,
-            name: row.repo_name,
-          },
-          pullRequest: {
-            id: row.pr_id,
-            number: row.pr_number,
-            title: row.pr_title,
-            state: row.pr_state,
-          },
-          analysis: {
-            id: row.analysis_id,
-            risk_score: row.risk_score,
-            risk_level: row.risk_level,
-            complexity_score: row.complexity_score,
-            complexity_level: row.complexity_level,
-            security_score: row.security_score,
-            lines_changed: row.lines_changed,
-            files_changed: row.files_changed,
-            analyzed_at: row.analyzed_at,
-          },
-          security_findings: securityFindings,
-        }
-      })
-    )
+    // 3.3: レスポンスデータを構築
+    const analysesWithFindings = analyses.map((row) => ({
+      repository: {
+        id: row.repo_id,
+        owner: row.repo_owner,
+        name: row.repo_name,
+      },
+      pullRequest: {
+        id: row.pr_id,
+        number: row.pr_number,
+        title: row.pr_title,
+        state: row.pr_state,
+      },
+      analysis: {
+        id: row.analysis_id,
+        risk_score: row.risk_score,
+        risk_level: row.risk_level,
+        complexity_score: row.complexity_score,
+        complexity_level: row.complexity_level,
+        security_score: row.security_score,
+        lines_changed: row.lines_changed,
+        files_changed: row.files_changed,
+        analyzed_at: row.analyzed_at,
+      },
+      security_findings: findingsMap.get(row.analysis_id) || [],
+    }))
 
-    // 3.3: レスポンスを返却
+    // 3.4: レスポンスを返却
     return NextResponse.json(
       {
         success: true,

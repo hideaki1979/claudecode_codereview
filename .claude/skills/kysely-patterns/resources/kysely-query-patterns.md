@@ -17,6 +17,9 @@ export async function getDailyRiskTrends(
   pr_count: number
   critical_count: number
 }>> {
+  // ✅ SECURE: Calculate date in JavaScript to avoid sql.raw() injection risk
+  const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
   return await db
     .selectFrom('analyses as a')
     .innerJoin('pull_requests as pr', 'pr.id', 'a.pr_id')
@@ -28,9 +31,7 @@ export async function getDailyRiskTrends(
       sql<number>`SUM(CASE WHEN a.risk_level = 'critical' THEN 1 ELSE 0 END)`.as('critical_count'),
     ])
     .where('pr.repository_id', '=', repositoryId)
-    .where('a.analyzed_at', '>=',
-      sql`CURRENT_DATE - INTERVAL '${sql.raw(days.toString())} days'`
-    )
+    .where('a.analyzed_at', '>=', sinceDate)
     .groupBy(sql`DATE(a.analyzed_at)`)
     .orderBy('date', 'desc')
     .execute()
@@ -193,8 +194,27 @@ export async function upsertRepositories(
 
 ## Type-Safe Dynamic Query Building
 
-### Complex Filter Builder
+### LIKE Pattern Escaping
+
 ```typescript
+// ✅ SECURE: Escape special characters in LIKE patterns
+// Prevents unintended wildcard matching when user input contains %, _, or \
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_\\]/g, '\\$&')
+}
+
+// Usage: Always escape user input before using in LIKE/ILIKE patterns
+const searchPattern = `%${escapeLikePattern(userInput)}%`
+```
+
+### Complex Filter Builder
+
+```typescript
+// ✅ SECURE: Escape LIKE pattern special characters
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_\\]/g, '\\$&')
+}
+
 export async function searchPRs(filters: {
   repositoryId?: string
   state?: 'open' | 'closed' | 'merged'
@@ -234,9 +254,11 @@ export async function searchPRs(filters: {
   }
 
   if (filters.search) {
+    // ✅ SECURE: Escape user input to prevent wildcard injection
+    const escapedSearch = escapeLikePattern(filters.search)
     query = query.where((eb) =>
       eb.or([
-        eb('pr.title', 'ilike', `%${filters.search}%`),
+        eb('pr.title', 'ilike', `%${escapedSearch}%`),
         eb('pr.number', '=', parseInt(filters.search) || 0),
       ])
     )
@@ -251,6 +273,7 @@ export async function searchPRs(filters: {
 ## Anti-Patterns to Avoid
 
 ### ❌ Don't: Multiple round trips to database
+
 ```typescript
 // BAD: N+1 query
 for (const pr of pullRequests) {
@@ -269,6 +292,7 @@ const results = await db
 ```
 
 ### ❌ Don't: Select all columns from all tables
+
 ```typescript
 // BAD: Ambiguous column names
 const result = await db
@@ -287,6 +311,7 @@ const result = await db
 ```
 
 ### ❌ Don't: Build SQL strings manually
+
 ```typescript
 // BAD: SQL injection risk
 const riskLevel = req.query.risk
