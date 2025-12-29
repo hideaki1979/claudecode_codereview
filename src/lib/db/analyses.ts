@@ -5,6 +5,7 @@
  * Handles PR analysis results storage and retrieval.
  */
 
+import { cache } from 'react'
 import { db } from './kysely'
 import { z } from 'zod'
 import { fromZodError } from 'zod-validation-error'
@@ -62,15 +63,15 @@ export async function createAnalysis(
  * @param id - Analysis UUID
  * @returns Analysis if found, undefined otherwise
  */
-export async function findAnalysisById(
+export const findAnalysisById = cache(async (
   id: string
-): Promise<Analysis | undefined> {
+): Promise<Analysis | undefined> => {
   return await db
     .selectFrom('analyses')
     .selectAll()
     .where('id', '=', id)
     .executeTakeFirst()
-}
+})
 
 /**
  * Find latest analysis for a pull request
@@ -78,16 +79,16 @@ export async function findAnalysisById(
  * @param prId - Pull request UUID
  * @returns Latest analysis if found, undefined otherwise
  */
-export async function findLatestAnalysisByPrId(
+export const findLatestAnalysisByPrId = cache(async (
   prId: string
-): Promise<Analysis | undefined> {
+): Promise<Analysis | undefined> => {
   return await db
     .selectFrom('analyses')
     .selectAll()
     .where('pr_id', '=', prId)
     .orderBy('analyzed_at', 'desc')
     .executeTakeFirst()
-}
+})
 
 /**
  * List all analyses for a pull request
@@ -98,13 +99,13 @@ export async function findLatestAnalysisByPrId(
  * @param options.offset - Number of results to skip (default: 0)
  * @returns Array of analyses ordered by analyzed_at DESC
  */
-export async function listAnalysesByPrId(
+export const listAnalysesByPrId = cache(async (
   prId: string,
   options?: {
     limit?: number
     offset?: number
   }
-): Promise<Analysis[]> {
+): Promise<Analysis[]> => {
   const { limit = 100, offset = 0 } = options || {}
 
   return await db
@@ -115,7 +116,7 @@ export async function listAnalysesByPrId(
     .limit(limit)
     .offset(offset)
     .execute()
-}
+})
 
 /**
  * List analyses by risk level
