@@ -1564,13 +1564,27 @@ Next.js 16公式ドキュメント、SWR公式ドキュメントを参照し、�
 
 **推定時間**: 3.5時間
 
+> **⚠️ Next.js 16 キャッシュ戦略の注記**
+>
+> Next.js 16では2つのキャッシュメカニズムがあります：
+>
+> | 方式 | スコープ | 用途 |
+> |------|----------|------|
+> | `React.cache` | リクエスト単位 | 同一リクエスト内での重複呼び出し防止（デデュプリケーション） |
+> | `'use cache'` + `cacheTag`/`cacheLife` | リクエスト間 | 永続的なデータキャッシュ（ISR的な動作） |
+>
+> **前提条件**: `'use cache'`を使用するには`next.config.ts`で`cacheComponents: true`が必要です。
+>
+> 以下の実装例では両方を併用していますが、`'use cache'`だけで永続的キャッシュとリクエスト内メモ化の両方が実現できるため、
+> `React.cache`は省略可能です。プロジェクトの要件に応じて選択してください。
+
 #### 1.1 DBクエリのReact cache化（1.5時間）
 
 **対象ファイル**: `src/lib/db/analyses.ts`
 
 ```typescript
 import { cache } from 'react'
-import { unstable_cacheTag as cacheTag, unstable_cacheLife as cacheLife } from 'next/cache'
+import { cacheTag, cacheLife } from 'next/cache'
 
 // React cacheでDBクエリをメモ化
 export const getAnalysisById = cache(async (analysisId: string) => {
@@ -1623,18 +1637,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 **対象ファイル**: `src/app/api/analysis/route.ts`
 
+> **⚠️ Next.js 16 revalidateTag の注記**
+>
+> Next.js 16では`revalidateTag`は2引数形式が推奨されます（1引数形式は非推奨）：
+> - `revalidateTag(tag, 'max')` - stale-while-revalidate動作（推奨）
+> - `revalidateTag(tag, { expire: 0 })` - 即座に期限切れ（Webhook/外部サービス向け）
+>
+> 詳細: https://nextjs.org/docs/app/api-reference/functions/revalidateTag
+
 ```typescript
 import { revalidateTag } from 'next/cache'
+
+// キャッシュタグ定数（analyses.tsと一致させる）
+const CACHE_TAGS = {
+  ANALYSES_LIST: 'analyses-list',
+  PR_ANALYSIS: (prId: string) => `pr-analysis-${prId}`,
+  ANALYSIS: (analysisId: string) => `analysis-${analysisId}`,
+} as const
 
 // POST: 分析後にキャッシュ無効化
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // ... existing analysis logic ...
 
   // DBに保存後、関連キャッシュを無効化
-  await saveToDatabase(analysisResult)
+  const savedAnalysis = await saveToDatabase(analysisResult)
 
-  revalidateTag(`pr-analyses-${prId}`)
-  revalidateTag(`analysis-${analysisResult.id}`)
+  // Next.js 16: 2引数形式で即座に期限切れ
+  revalidateTag(CACHE_TAGS.ANALYSES_LIST, { expire: 0 })
+  revalidateTag(CACHE_TAGS.PR_ANALYSIS(savedAnalysis.pr_id), { expire: 0 })
+  revalidateTag(CACHE_TAGS.ANALYSIS(savedAnalysis.id), { expire: 0 })
 
   return NextResponse.json(analysisResult, { status: 201 })
 }

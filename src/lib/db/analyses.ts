@@ -3,13 +3,27 @@
  *
  * CRUD operations for the analyses table.
  * Handles PR analysis results storage and retrieval.
+ *
+ * キャッシュ戦略:
+ * - 読み取り関数: 'use cache' + cacheTag + cacheLife で永続的キャッシュ
+ * - 書き込み関数: revalidateTag で関連キャッシュを無効化（APIルートで実行）
  */
 
-import { cache } from 'react'
+import { cacheTag, cacheLife } from 'next/cache'
 import { db } from './kysely'
 import { z } from 'zod'
 import { fromZodError } from 'zod-validation-error'
 import type { Analysis, NewAnalysis, DatabaseExecutor } from './types'
+
+/**
+ * キャッシュタグ定数
+ * revalidateTag()で使用するタグ名と一致させる
+ */
+const CACHE_TAGS = {
+  ANALYSES_LIST: 'analyses-list',
+  PR_ANALYSIS: (prId: string) => `pr-analysis-${prId}`,
+  ANALYSIS: (analysisId: string) => `analysis-${analysisId}`,
+} as const
 
 /**
  * Input validation schema for new analyses
@@ -60,38 +74,55 @@ export async function createAnalysis(
 /**
  * Find analysis by ID
  *
+ * 永続的キャッシュ（1時間）を使用。
+ * キャッシュは createAnalysis/deleteAnalysis 時に revalidateTag で無効化される。
+ *
  * @param id - Analysis UUID
  * @returns Analysis if found, undefined otherwise
  */
-export const findAnalysisById = cache(async (
+export async function findAnalysisById(
   id: string
-): Promise<Analysis | undefined> => {
+): Promise<Analysis | undefined> {
+  'use cache'
+  cacheTag(CACHE_TAGS.ANALYSIS(id))
+  cacheLife('hours')
+
   return await db
     .selectFrom('analyses')
     .selectAll()
     .where('id', '=', id)
     .executeTakeFirst()
-})
+}
 
 /**
  * Find latest analysis for a pull request
  *
+ * 永続的キャッシュ（1時間）を使用。
+ * キャッシュは新しい分析作成時に revalidateTag で無効化される。
+ *
  * @param prId - Pull request UUID
  * @returns Latest analysis if found, undefined otherwise
  */
-export const findLatestAnalysisByPrId = cache(async (
+export async function findLatestAnalysisByPrId(
   prId: string
-): Promise<Analysis | undefined> => {
+): Promise<Analysis | undefined> {
+  'use cache'
+  cacheTag(CACHE_TAGS.PR_ANALYSIS(prId))
+  cacheLife('hours')
+
   return await db
     .selectFrom('analyses')
     .selectAll()
     .where('pr_id', '=', prId)
     .orderBy('analyzed_at', 'desc')
     .executeTakeFirst()
-})
+}
 
 /**
  * List all analyses for a pull request
+ *
+ * 永続的キャッシュ（1時間）を使用。
+ * キャッシュは新しい分析作成時に revalidateTag で無効化される。
  *
  * @param prId - Pull request UUID
  * @param options - Query options
@@ -99,13 +130,17 @@ export const findLatestAnalysisByPrId = cache(async (
  * @param options.offset - Number of results to skip (default: 0)
  * @returns Array of analyses ordered by analyzed_at DESC
  */
-export const listAnalysesByPrId = cache(async (
+export async function listAnalysesByPrId(
   prId: string,
   options?: {
     limit?: number
     offset?: number
   }
-): Promise<Analysis[]> => {
+): Promise<Analysis[]> {
+  'use cache'
+  cacheTag(CACHE_TAGS.PR_ANALYSIS(prId))
+  cacheLife('hours')
+
   const { limit = 100, offset = 0 } = options || {}
 
   return await db
@@ -116,12 +151,13 @@ export const listAnalysesByPrId = cache(async (
     .limit(limit)
     .offset(offset)
     .execute()
-})
+}
 
 /**
  * List analyses by risk level
  *
  * Useful for dashboards showing high-risk PRs.
+ * 永続的キャッシュ（1時間）を使用。
  *
  * @param riskLevel - Risk level filter
  * @param options - Query options
@@ -138,6 +174,10 @@ export async function listAnalysesByRiskLevel(
     since?: Date
   }
 ): Promise<Analysis[]> {
+  'use cache'
+  cacheTag(CACHE_TAGS.ANALYSES_LIST)
+  cacheLife('hours')
+
   const { limit = 100, offset = 0, since } = options || {}
 
   let query = db
@@ -159,6 +199,8 @@ export async function listAnalysesByRiskLevel(
 /**
  * Get analysis statistics for a date range
  *
+ * 永続的キャッシュ（1時間）を使用。ダッシュボードの統計表示に最適化。
+ *
  * @param options - Query options
  * @param options.since - Start date (default: 30 days ago)
  * @param options.until - End date (default: now)
@@ -179,6 +221,10 @@ export async function getAnalysisStatistics(options?: {
     critical: number
   }
 }> {
+  'use cache'
+  cacheTag(CACHE_TAGS.ANALYSES_LIST)
+  cacheLife('hours')
+
   const since = options?.since || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   const until = options?.until || new Date()
 
