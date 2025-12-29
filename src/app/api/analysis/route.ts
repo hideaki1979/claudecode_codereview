@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { z } from 'zod'
 import { getPullRequest } from '@/lib/github/pullRequests'
 import { getPullRequestDiff } from '@/lib/github/diff'
@@ -21,6 +22,16 @@ import { createSecurityFindings, listSecurityFindingsByAnalysisId, listSecurityF
 import type { AnalysisData } from '@/types/analysis'
 import type { Database } from '@/lib/db/types'
 import { HTTP_STATUS } from '@/types/api'
+
+/**
+ * キャッシュタグ定数
+ * revalidateTag()で使用するタグ名を一元管理
+ */
+const CACHE_TAGS = {
+  ANALYSES_LIST: 'analyses-list',
+  PR_ANALYSIS: (prId: string) => `pr-analysis-${prId}`,
+  ANALYSIS: (analysisId: string) => `analysis-${analysisId}`,
+} as const
 
 /**
  * POST リクエストボディのバリデーションスキーマ
@@ -185,7 +196,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return analysis
     })
 
-    // ステップ5: 成功レスポンスを返却
+    // ステップ5: 関連するキャッシュを無効化
+    // 新しい分析結果が作成されたため、関連するキャッシュをパージ
+    // Next.js 16では revalidateTag に profile (有効期限設定) を渡す必要がある
+    revalidateTag(CACHE_TAGS.ANALYSES_LIST, { expire: 0 })
+    revalidateTag(CACHE_TAGS.PR_ANALYSIS(savedAnalysis.pr_id), { expire: 0 })
+    revalidateTag(CACHE_TAGS.ANALYSIS(savedAnalysis.id), { expire: 0 })
+
+    // ステップ6: 成功レスポンスを返却
     return NextResponse.json(
       {
         success: true,
@@ -335,7 +353,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       // 2.3: セキュリティ検出を取得（2クエリ目）
       const securityFindings = await listSecurityFindingsByAnalysisId(result.analysis_id)
 
-      // 2.4: レスポンスを返却
+      // 2.4: レスポンスを返却（Cache-Controlヘッダー付き）
       return NextResponse.json(
         {
           success: true,
@@ -365,7 +383,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             security_findings: securityFindings,
           },
         },
-        { status: HTTP_STATUS.OK }
+        {
+          status: HTTP_STATUS.OK,
+          headers: {
+            // CDNキャッシュ: 5分、stale-while-revalidate: 10分
+            'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+            // Vercel CDN専用ヘッダー
+            'CDN-Cache-Control': 'public, s-maxage=600',
+            'Vercel-CDN-Cache-Control': 'public, s-maxage=600',
+          },
+        }
       )
     }
 
@@ -442,7 +469,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       security_findings: findingsMap.get(row.analysis_id) || [],
     }))
 
-    // 3.4: レスポンスを返却
+    // 3.4: レスポンスを返却（Cache-Controlヘッダー付き）
     return NextResponse.json(
       {
         success: true,
@@ -457,7 +484,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           },
         },
       },
-      { status: HTTP_STATUS.OK }
+      {
+        status: HTTP_STATUS.OK,
+        headers: {
+          // CDNキャッシュ: 5分、stale-while-revalidate: 10分
+          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+          // Vercel CDN専用ヘッダー
+          'CDN-Cache-Control': 'public, s-maxage=600',
+          'Vercel-CDN-Cache-Control': 'public, s-maxage=600',
+        },
+      }
     )
   } catch (error) {
     console.error('Analysis API error:', error)

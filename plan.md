@@ -397,7 +397,7 @@ export const db = new Kysely<Database>({
 - [x] `migrations/001_initial_schema.ts` 作成
 - [x] テーブル作成スクリプト実装
 - [x] インデックス設定
-- [ ] マイグレーション実行・検証
+- [x] マイグレーション実行・検証
 
 #### ステップ4: 基本CRUD実装（3-4日）
 
@@ -1539,11 +1539,435 @@ const user = await db
 
 ---
 
+## 📋 Phase 2 残タスク詳細実装計画
+
+### 概要
+
+Next.js 16公式ドキュメント、SWR公式ドキュメントを参照し、ベストプラクティスに基づいた実装計画を策定。
+
+**技術選定**:
+- **サーバーサイド**: React `cache` + `revalidateTag`（Next.js 16ネイティブ）
+- **クライアントサイド**: SWR（Vercelネイティブ、軽量、シンプルAPI）
+
+**選定理由（SWR vs TanStack Query）**:
+| 観点 | SWR | TanStack Query |
+|------|-----|----------------|
+| バンドルサイズ | ~4KB | ~13KB |
+| Next.js統合 | Vercelネイティブ | 追加設定必要 |
+| API複雑度 | シンプル | 多機能 |
+| 学習コスト | 低 | 中 |
+| ユースケース | 読み取り中心 | CRUD中心 |
+
+→ 本プロジェクトは**読み取り90%/書き込み10%**のため、SWRが最適
+
+### Task 1: キャッシュロジック実装（サーバーサイド）
+
+**推定時間**: 3.5時間
+
+> **⚠️ Next.js 16 キャッシュ戦略の注記**
+>
+> Next.js 16では2つのキャッシュメカニズムがあります：
+>
+> | 方式 | スコープ | 用途 |
+> |------|----------|------|
+> | `React.cache` | リクエスト単位 | 同一リクエスト内での重複呼び出し防止（デデュプリケーション） |
+> | `'use cache'` + `cacheTag`/`cacheLife` | リクエスト間 | 永続的なデータキャッシュ（ISR的な動作） |
+>
+> **前提条件**: `'use cache'`を使用するには`next.config.ts`で`cacheComponents: true`が必要です。
+>
+> 以下の実装例では両方を併用していますが、`'use cache'`だけで永続的キャッシュとリクエスト内メモ化の両方が実現できるため、
+> `React.cache`は省略可能です。プロジェクトの要件に応じて選択してください。
+
+#### 1.1 DBクエリのReact cache化（1.5時間）
+
+**対象ファイル**: `src/lib/db/analyses.ts`
+
+```typescript
+import { cache } from 'react'
+import { cacheTag, cacheLife } from 'next/cache'
+
+// React cacheでDBクエリをメモ化
+export const getAnalysisById = cache(async (analysisId: string) => {
+  'use cache'
+  cacheTag(`analysis-${analysisId}`)
+  cacheLife('hours')  // 1時間キャッシュ
+
+  return db
+    .selectFrom('analyses')
+    .selectAll()
+    .where('id', '=', analysisId)
+    .executeTakeFirst()
+})
+
+export const getAnalysesByPrId = cache(async (prId: string) => {
+  'use cache'
+  cacheTag(`pr-analyses-${prId}`)
+  cacheLife('hours')
+
+  return db
+    .selectFrom('analyses')
+    .selectAll()
+    .where('pull_request_id', '=', prId)
+    .orderBy('created_at', 'desc')
+    .execute()
+})
+```
+
+#### 1.2 API Cache-Controlヘッダー追加（1時間）
+
+**対象ファイル**: `src/app/api/analysis/route.ts`
+
+```typescript
+// GET: キャッシュヘッダー追加
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  // ... existing logic ...
+
+  return NextResponse.json(result, {
+    status: 200,
+    headers: {
+      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+      'CDN-Cache-Control': 'public, s-maxage=600',
+      'Vercel-CDN-Cache-Control': 'public, s-maxage=600',
+    }
+  })
+}
+```
+
+#### 1.3 キャッシュ無効化実装（1時間）
+
+**対象ファイル**: `src/app/api/analysis/route.ts`
+
+> **⚠️ Next.js 16 revalidateTag の注記**
+>
+> Next.js 16では`revalidateTag`は2引数形式が推奨されます（1引数形式は非推奨）：
+> - `revalidateTag(tag, 'max')` - stale-while-revalidate動作（推奨）
+> - `revalidateTag(tag, { expire: 0 })` - 即座に期限切れ（Webhook/外部サービス向け）
+>
+> 詳細: https://nextjs.org/docs/app/api-reference/functions/revalidateTag
+
+```typescript
+import { revalidateTag } from 'next/cache'
+
+// キャッシュタグ定数（analyses.tsと一致させる）
+const CACHE_TAGS = {
+  ANALYSES_LIST: 'analyses-list',
+  PR_ANALYSIS: (prId: string) => `pr-analysis-${prId}`,
+  ANALYSIS: (analysisId: string) => `analysis-${analysisId}`,
+} as const
+
+// POST: 分析後にキャッシュ無効化
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  // ... existing analysis logic ...
+
+  // DBに保存後、関連キャッシュを無効化
+  const savedAnalysis = await saveToDatabase(analysisResult)
+
+  // Next.js 16: 2引数形式で即座に期限切れ
+  revalidateTag(CACHE_TAGS.ANALYSES_LIST, { expire: 0 })
+  revalidateTag(CACHE_TAGS.PR_ANALYSIS(savedAnalysis.pr_id), { expire: 0 })
+  revalidateTag(CACHE_TAGS.ANALYSIS(savedAnalysis.id), { expire: 0 })
+
+  return NextResponse.json(analysisResult, { status: 201 })
+}
+```
+
+### Task 2: キャッシュ戦略実装（SWR）
+
+**推定時間**: 9時間
+
+#### 2.1 SWRインストール・プロバイダー設定（1時間）
+
+**コマンド**:
+```bash
+npm install swr
+```
+
+**新規ファイル**: `src/components/providers/SWRProvider.tsx`
+
+```typescript
+'use client'
+
+import { SWRConfig } from 'swr'
+import { ReactNode } from 'react'
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  if (!res.ok) {
+    const error = new Error('API request failed')
+    error.cause = await res.json().catch(() => ({}))
+    throw error
+  }
+  return res.json()
+}
+
+export function SWRProvider({ children }: { children: ReactNode }) {
+  return (
+    <SWRConfig
+      value={{
+        fetcher,
+        revalidateOnFocus: false,      // フォーカス時の再検証を無効化
+        dedupingInterval: 2000,         // 2秒間のリクエスト重複排除
+        keepPreviousData: true,         // 新データ取得中は前データ表示
+        errorRetryCount: 3,             // エラー時3回リトライ
+        errorRetryInterval: 5000,       // リトライ間隔5秒
+        shouldRetryOnError: (error) => {
+          // 4xxエラーはリトライしない
+          return !(error?.status >= 400 && error?.status < 500)
+        },
+      }}
+    >
+      {children}
+    </SWRConfig>
+  )
+}
+```
+
+**更新ファイル**: `src/app/layout.tsx`
+
+```typescript
+import { SWRProvider } from '@/components/providers/SWRProvider'
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="ja">
+      <body>
+        <SWRProvider>
+          {children}
+        </SWRProvider>
+      </body>
+    </html>
+  )
+}
+```
+
+#### 2.2 usePullRequestsフック書き換え（3時間）
+
+**対象ファイル**: `src/hooks/usePullRequests.ts`
+
+```typescript
+'use client'
+
+import useSWR from 'swr'
+import { ListPullRequestsQuery, ListPullRequestsResponse } from '@/types'
+
+interface UsePullRequestsOptions {
+  enabled?: boolean
+  refreshInterval?: number
+}
+
+export function usePullRequests(
+  params: ListPullRequestsQuery,
+  options: UsePullRequestsOptions = {}
+) {
+  const { enabled = true, refreshInterval } = options
+
+  // URLSearchParamsでキーを生成
+  const searchParams = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) searchParams.set(key, String(value))
+  })
+
+  const key = enabled ? `/api/pullRequests?${searchParams}` : null
+
+  const { data, error, isLoading, isValidating, mutate } = useSWR<ListPullRequestsResponse>(
+    key,
+    {
+      refreshInterval,
+      revalidateOnMount: true,
+    }
+  )
+
+  return {
+    data: data?.data ?? [],
+    pagination: data?.pagination ?? null,
+    error: error ?? null,
+    isLoading,
+    isValidating,
+    mutate,
+    refetch: () => mutate(),
+  }
+}
+```
+
+#### 2.3 useAnalysisフック作成（2時間）
+
+**新規ファイル**: `src/hooks/useAnalysis.ts`
+
+```typescript
+'use client'
+
+import useSWR from 'swr'
+import useSWRMutation from 'swr/mutation'
+
+interface Analysis {
+  id: string
+  pullRequestId: string
+  riskScore: number
+  complexity: string
+  findings: SecurityFinding[]
+  createdAt: string
+}
+
+// GET: 分析結果取得
+export function useAnalysis(prId: string | null) {
+  const { data, error, isLoading, mutate } = useSWR<Analysis>(
+    prId ? `/api/analysis?prId=${prId}` : null,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000,
+    }
+  )
+
+  return {
+    analysis: data ?? null,
+    error,
+    isLoading,
+    mutate,
+  }
+}
+
+// POST: 分析実行
+async function runAnalysisFetcher(
+  url: string,
+  { arg }: { arg: { owner: string; repo: string; prNumber: number } }
+) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(arg),
+  })
+  if (!res.ok) throw new Error('Analysis failed')
+  return res.json()
+}
+
+export function useRunAnalysis() {
+  const { trigger, isMutating, error } = useSWRMutation(
+    '/api/analysis',
+    runAnalysisFetcher
+  )
+
+  return {
+    runAnalysis: trigger,
+    isAnalyzing: isMutating,
+    error,
+  }
+}
+```
+
+#### 2.4 DashboardContentリファクタリング（3時間）
+
+**対象ファイル**: `src/app/dashboard/DashboardContent.tsx`
+
+```typescript
+'use client'
+
+import { usePullRequests } from '@/hooks/usePullRequests'
+import { useAnalysis, useRunAnalysis } from '@/hooks/useAnalysis'
+import { useState } from 'react'
+
+export function DashboardContent() {
+  const [selectedPrId, setSelectedPrId] = useState<string | null>(null)
+
+  // PRリスト取得（SWR）
+  const {
+    data: pullRequests,
+    isLoading: prLoading,
+    error: prError,
+    refetch: refetchPrs,
+  } = usePullRequests({ owner: 'your-org', repo: 'your-repo' })
+
+  // 選択PRの分析結果取得（SWR）
+  const {
+    analysis,
+    isLoading: analysisLoading,
+    mutate: mutateAnalysis,
+  } = useAnalysis(selectedPrId)
+
+  // 分析実行（SWR Mutation）
+  const { runAnalysis, isAnalyzing } = useRunAnalysis()
+
+  const handleAnalyze = async (pr: PullRequest) => {
+    const result = await runAnalysis({
+      owner: pr.owner,
+      repo: pr.repo,
+      prNumber: pr.number,
+    })
+    // 分析完了後、キャッシュを更新
+    mutateAnalysis(result)
+  }
+
+  // ... render logic ...
+}
+```
+
+### アーキテクチャ図
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Client (Browser)                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                    SWRProvider                           │   │
+│  │  ┌─────────────────┐  ┌─────────────────┐              │   │
+│  │  │ usePullRequests │  │   useAnalysis   │              │   │
+│  │  │  - dedupe       │  │  - cache        │              │   │
+│  │  │  - revalidate   │  │  - mutate       │              │   │
+│  │  └────────┬────────┘  └────────┬────────┘              │   │
+│  └───────────┼─────────────────────┼────────────────────────┘   │
+└──────────────┼─────────────────────┼────────────────────────────┘
+               │                     │
+               ▼                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Next.js Edge/Serverless                      │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────────────────────────┐  │
+│  │  Vercel CDN     │  │  API Routes                         │  │
+│  │  Cache-Control  │  │  ┌─────────────────────────────┐   │  │
+│  │  - s-maxage     │  │  │  React cache()              │   │  │
+│  │  - stale-       │  │  │  - DBクエリメモ化           │   │  │
+│  │    while-       │  │  │  - revalidateTag()          │   │  │
+│  │    revalidate   │  │  └─────────────────────────────┘   │  │
+│  └─────────────────┘  └─────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      PostgreSQL (Kysely)                         │
+│  ┌─────────────────┐  ┌─────────────────┐                      │
+│  │  analyses       │  │  pull_requests  │                      │
+│  │  security_      │  │  repositories   │                      │
+│  │  findings       │  │                 │                      │
+│  └─────────────────┘  └─────────────────┘                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 実装スケジュール
+
+| 日 | タスク | 推定時間 | 担当 |
+|----|--------|----------|------|
+| Day 1 | Task 1: サーバーサイドキャッシュ | 3.5h | - |
+| Day 1-2 | Task 2.1-2.2: SWR設定・usePullRequests | 4h | - |
+| Day 2-3 | Task 2.3-2.4: useAnalysis・Dashboard | 5h | - |
+| Day 3 | テスト・動作確認 | 2h | - |
+
+**合計**: 約12.5時間（2-3日）
+
+### 成功基準
+
+- [ ] 分析結果がキャッシュされ、再取得時にDBアクセスが減少
+- [ ] ページリロード後もSWRキャッシュによりスムーズな表示
+- [ ] 分析実行後、キャッシュが適切に無効化される
+- [ ] Vercel CDNキャッシュヒット率 > 70%
+- [ ] 初回ロード後のAPIレスポンス時間 < 100ms（キャッシュヒット時）
+
+---
+
 ## 📝 変更履歴
 
 | 日付 | バージョン | 変更内容 | 担当 |
 |-----|----------|---------|------|
 | 2025-12-22 | 1.0.0 | 初版作成 | Claude Code |
+| 2025-12-29 | 1.1.0 | Phase 2残タスク詳細実装計画追加（キャッシュロジック・SWR戦略） | Claude Code |
 
 ---
 

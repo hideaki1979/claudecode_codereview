@@ -1,71 +1,15 @@
 /**
  * Dashboard Content Component (Client Component)
  *
- * GitHub API Route Handler を使用してPRデータを取得し、
+ * SWRを使用してPRデータと分析結果を取得し、
  * フィルタリングと表示を行う
  */
 
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { usePullRequests } from '@/hooks/usePullRequests';
-import type {
-  ComplexityMetrics,
-  ImpactMetrics,
-  RiskAssessment,
-} from '@/types/analysis';
-import type { SecurityMetrics } from '@/lib/analysis/security';
-
-// API response type for analysis endpoint
-interface AnalysisAPIResponse {
-  success: boolean;
-  data?: {
-    analysis: {
-      id: string;
-      risk_score: number;
-      risk_level: string;
-      complexity_score: number;
-      complexity_level: string;
-      security_score: number;
-      lines_changed: number;
-      files_changed: number;
-      analyzed_at: string;
-    };
-    analyzed_at: string;
-    metrics: {
-      risk: RiskAssessment;
-      complexity: ComplexityMetrics;
-      security: SecurityMetrics;
-      impact: ImpactMetrics;
-    };
-  };
-  error?: string;
-  code?: string;
-}
-
-// API client for analysis endpoint
-async function runAnalysisAPI(params: {
-  owner: string;
-  repo: string;
-  pull_number: number;
-  signal?: AbortSignal;
-}): Promise<AnalysisAPIResponse> {
-  const response = await fetch('/api/analysis', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(params),
-    signal: params.signal,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Analysis failed');
-  }
-
-  return response.json();
-}
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { usePullRequestsSWR } from '@/hooks/usePullRequestsSWR';
+import { useRunAnalysis } from '@/hooks/useAnalysis';
 import { PRCard } from '@/components/PRCard';
 import { AnalysisChart } from '@/components/AnalysisChart';
 import { PRFilter } from '@/components/PRFilter';
@@ -108,21 +52,33 @@ export function DashboardContent({
   const [analyzedData, setAnalyzedData] = useState<PRWithAnalysis[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // GitHub API からプルリクエスト一覧を取得
-  const prState = usePullRequests({
+  // SWRでプルリクエスト一覧を取得
+  const {
+    data: prData,
+    // pagination, // 将来のページネーション実装時に使用
+    rateLimit,
+    cacheHit,
+    error: prError,
+    isLoading,
+    isValidating,
+    hasData,
+    hasError,
+    refetch,
+  } = usePullRequestsSWR({
     owner,
     repo,
     state: 'all',
     per_page: 20,
   });
 
-  const { isLoading, hasError, hasData, refetch } = prState;
+  // SWRMutationで分析実行
+  const { runAnalysis, isAnalyzing: isRunningAnalysis } = useRunAnalysis();
 
-  // prState.statusとprState.dataをuseMemoでメモ化（依存配列を明確にするため）
-  const prStatus = useMemo(() => prState.status, [prState.status]);
-  const prData = useMemo(() => {
-    return prState.status === 'success' ? prState.data : null;
-  }, [prState.status, prState.data]);
+  // runAnalysisをrefで保持して安定した参照を維持（無限ループ防止）
+  const runAnalysisRef = useRef(runAnalysis);
+  useEffect(() => {
+    runAnalysisRef.current = runAnalysis;
+  }, [runAnalysis]);
 
   // ローディング状態の変化を親コンポーネントに通知
   // onLoadingChangeをrefで保持し、依存配列から除外してReactの警告を回避
@@ -136,68 +92,67 @@ export function DashboardContent({
     onLoadingChangeRef.current?.(isCurrentlyLoading);
   }, [isLoading, isAnalyzing]);
 
+  // 単一PRを分析する関数（useCallbackでメモ化、refを使用して安定化）
+  const analyzeSinglePR = useCallback(
+    async (pr: GitHubPullRequestSimple): Promise<PRWithAnalysis | null> => {
+      try {
+        const apiResult = await runAnalysisRef.current({
+          owner,
+          repo,
+          pull_number: pr.number,
+        });
+
+        if (apiResult.success && apiResult.data) {
+          return {
+            pr,
+            analysis: {
+              risk: apiResult.data.metrics.risk,
+              complexity: apiResult.data.metrics.complexity,
+              security: apiResult.data.metrics.security,
+              impact: apiResult.data.metrics.impact,
+              analyzed_at: apiResult.data.analyzed_at,
+            },
+          } as PRWithAnalysis;
+        }
+        return null;
+      } catch (error) {
+        console.error(`PR #${pr.number} の分析に失敗:`, error);
+        return null;
+      }
+    },
+    [owner, repo] // runAnalysisをrefで参照するため依存配列から除外
+  );
+
+  // 分析済みのPRデータを追跡（重複分析防止）
+  const lastAnalyzedPrDataRef = useRef<GitHubPullRequestSimple[] | null>(null);
+
   // プルリクエストを取得したら分析を実行
   useEffect(() => {
     // データが取得できていない場合はスキップ
-    if (!hasData || prStatus !== 'success' || !prData) {
-      setAnalyzedData([]);
+    if (!hasData || !prData || prData.length === 0) {
+      setAnalyzedData((prev) => (prev.length > 0 ? [] : prev));
+      lastAnalyzedPrDataRef.current = null;
       return;
     }
 
-    const pullRequests = prData;
-
-    if (pullRequests.length === 0) {
-      setAnalyzedData([]);
+    // 同じデータに対して既に分析済みの場合はスキップ
+    if (lastAnalyzedPrDataRef.current === prData) {
       return;
     }
 
-    // AbortControllerを使用して、レポジトリ変更時に非同期処理をキャンセル
-    const controller = new AbortController();
-    const signal = controller.signal;
+    let isCancelled = false;
 
     // 分析処理
     const analyzeAllPRs = async (): Promise<void> => {
       setIsAnalyzing(true);
+      lastAnalyzedPrDataRef.current = prData;
 
       try {
         const results = await Promise.all(
-          pullRequests.map(async (pr: GitHubPullRequestSimple) => {
-            try {
-              // 分析APIを呼び出し（分析実行 + DB保存）
-              const apiResult = await runAnalysisAPI({
-                owner,
-                repo,
-                pull_number: pr.number,
-                signal,
-              });
-
-              // 分析成功時のみ結果を返す
-              if (apiResult.success && apiResult.data) {
-                return {
-                  pr,
-                  analysis: {
-                    risk: apiResult.data.metrics.risk,
-                    complexity: apiResult.data.metrics.complexity,
-                    security: apiResult.data.metrics.security,
-                    impact: apiResult.data.metrics.impact,
-                    analyzed_at: apiResult.data.analyzed_at,
-                  },
-                } as PRWithAnalysis;
-              }
-              return null;
-            } catch (error) {
-              // AbortErrorの場合は、キャンセル処理なので再スロー
-              if (error instanceof Error && error.name === 'AbortError') {
-                throw error;
-              }
-              // それ以外のエラーはログ出力して、nullを返す（他のPRの処理は継続）
-              console.error(`PR #${pr.number} の分析に失敗:`, error);
-              return null;
-            }
-          })
+          prData.map((pr) => analyzeSinglePR(pr))
         );
 
-        if (signal.aborted) {
+        if (isCancelled) {
           return;
         }
 
@@ -207,16 +162,12 @@ export function DashboardContent({
         );
         setAnalyzedData(validResults);
       } catch (error) {
-        // AbortErrorの場合は、キャンセル処理なのでログ出力やエラーハンドリングは行わない
-        if (error instanceof Error && error.name === 'AbortError') {
-          // キャンセル時は何もしない
-          return;
-        }
-        // それ以外のエラーはログ出力
         console.error('PR分析中にErrorが発生：', error);
+        lastAnalyzedPrDataRef.current = null; // エラー時はリセット
       } finally {
-        // 処理が完了・失敗・キャンセルされた場合、すべてリセット
-        setIsAnalyzing(false);
+        if (!isCancelled) {
+          setIsAnalyzing(false);
+        }
       }
     };
 
@@ -224,10 +175,10 @@ export function DashboardContent({
 
     // クリーンアップ関数: レポジトリが変更された際に実行
     return () => {
-      controller.abort();
+      isCancelled = true;
       setIsAnalyzing(false);
     };
-  }, [hasData, prStatus, prData, owner, repo]);
+  }, [hasData, prData, analyzeSinglePR]);
 
   // PR データをフィルタリング
   const filteredData = useMemo(() => {
@@ -289,28 +240,21 @@ export function DashboardContent({
   }
 
   // エラー状態
-  if (hasError) {
-    // 型ガード: hasErrorがtrueの場合、statusは'error'でerrorが存在する
-    if (prState.status !== 'error') {
-      return null; // 型安全性のため
-    }
-
-    const errorInfo = prState.error;
-
+  if (hasError && prError) {
     return (
       <div className="rounded-lg border-2 border-red-200 bg-red-50 p-8 text-center">
         <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
         <h3 className="mt-4 text-lg font-semibold text-red-900">
           データの取得に失敗しました
         </h3>
-        <p className="mt-2 text-sm text-red-700">{errorInfo.message}</p>
-        {errorInfo.details && (
+        <p className="mt-2 text-sm text-red-700">{prError.message}</p>
+        {prError.details && (
           <details className="mt-4 text-left">
             <summary className="cursor-pointer text-sm text-red-600">
               詳細情報を表示
             </summary>
             <pre className="mt-2 overflow-auto rounded bg-red-100 p-2 text-xs text-red-800">
-              {errorInfo.details}
+              {prError.details}
             </pre>
           </details>
         )}
@@ -326,12 +270,8 @@ export function DashboardContent({
   }
 
   // 分析中状態
-  if (isAnalyzing) {
-    // PRカウントを型安全に取得
-    let prCount = 0;
-    if (prState.status === 'success') {
-      prCount = prState.data.length;
-    }
+  if (isAnalyzing || isRunningAnalysis) {
+    const prCount = prData?.length ?? 0;
 
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -348,37 +288,35 @@ export function DashboardContent({
     );
   }
 
-  // レート制限情報の取得（型安全）
-  let rateLimitInfo = null;
-  let cacheHitInfo = false;
-
-  if (prState.status === 'success') {
-    rateLimitInfo = prState.rateLimit;
-    cacheHitInfo = prState.cacheHit;
-  }
-
   return (
     <div className="space-y-6">
       {/* ステータス情報 */}
-      {hasData && rateLimitInfo && (
+      {hasData && rateLimit && (
         <div className="rounded-lg bg-blue-50 p-4">
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-4">
-              {cacheHitInfo && (
+              {cacheHit && (
                 <span className="inline-flex items-center gap-1 text-green-600">
                   <span className="h-2 w-2 rounded-full bg-green-500" />
                   キャッシュから取得
                 </span>
               )}
+              {isValidating && (
+                <span className="inline-flex items-center gap-1 text-blue-600">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  バックグラウンド更新中
+                </span>
+              )}
               <span className="text-gray-600">
-                レート制限: {rateLimitInfo.remaining}/{rateLimitInfo.limit}
+                レート制限: {rateLimit.remaining}/{rateLimit.limit}
               </span>
             </div>
             <button
               onClick={handleRefetch}
-              className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
+              disabled={isValidating}
+              className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 disabled:opacity-50"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${isValidating ? 'animate-spin' : ''}`} />
               更新
             </button>
           </div>
