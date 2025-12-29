@@ -6,6 +6,9 @@
  *
  * For Neon/Vercel Postgres: Uses DATABASE_URL_UNPOOLED for direct connection
  * (required for schema changes as pooled connections may have limitations)
+ *
+ * This module imports shared environment detection and connection string
+ * logic from kysely.ts to ensure consistent behavior across the application.
  */
 
 import 'dotenv/config'
@@ -15,64 +18,38 @@ import { Pool as NeonPool } from '@neondatabase/serverless'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import type { Database } from './types'
-
-/**
- * Detect if running in Neon environment
- */
-const isNeonEnvironment = (): boolean => {
-  if (process.env.VERCEL) {
-    return true
-  }
-  const connectionString = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || process.env.POSTGRES_URL
-  if (connectionString) {
-    return (
-      connectionString.includes('neon.tech') ||
-      connectionString.includes('vercel-storage.com')
-    )
-  }
-  return false
-}
-
-/**
- * Get connection string for migrations
- * Prefers DATABASE_URL_UNPOOLED for direct connection (recommended for migrations)
- */
-const getMigrationConnectionString = (): string => {
-  // For Neon: prefer unpooled connection for migrations
-  const unpooled = process.env.DATABASE_URL_UNPOOLED
-  if (unpooled) {
-    console.log('📌 Using unpooled connection for migrations')
-    return unpooled
-  }
-
-  // Fallback to regular connection string
-  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL
-  if (!connectionString) {
-    throw new Error(
-      'Database connection string not found. Please set DATABASE_URL or DATABASE_URL_UNPOOLED.'
-    )
-  }
-  return connectionString
-}
+import { isNeonEnvironment, getUnpooledConnectionString } from './kysely'
 
 /**
  * Create database instance for migrations
  * Uses direct connection (unpooled) for schema changes
+ *
+ * This function uses shared environment detection from kysely.ts,
+ * ensuring migrations respect USE_LOCAL_DB setting and use the
+ * correct connection string for the target environment.
  */
 const createMigrationDb = (): Kysely<Database> => {
-  const connectionString = getMigrationConnectionString()
+  const connectionString = getUnpooledConnectionString()
+  const isNeon = isNeonEnvironment()
+
+  // Log which environment is being used
+  if (process.env.USE_LOCAL_DB === 'true') {
+    console.log('🐳 Using local Docker database for migrations (USE_LOCAL_DB=true)')
+  } else if (isNeon) {
+    console.log('🌐 Using Neon serverless pool for migrations')
+  } else {
+    console.log('🐳 Using pg pool for migrations (local/Docker)')
+  }
 
   let pool: PgPool | NeonPool
 
-  if (isNeonEnvironment()) {
-    console.log('🌐 Using Neon serverless pool for migrations')
+  if (isNeon) {
     pool = new NeonPool({
       connectionString,
       max: 1, // Single connection for migrations
       connectionTimeoutMillis: 30000, // Longer timeout for schema changes
     })
   } else {
-    console.log('🐳 Using pg pool for migrations (local/Docker)')
     pool = new PgPool({
       connectionString,
       max: 1,

@@ -9,7 +9,7 @@
 
 import { Kysely, PostgresDialect } from 'kysely'
 import { Pool as PgPool } from 'pg'
-import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless'
+import { Pool as NeonPool } from '@neondatabase/serverless'
 import { z } from 'zod'
 import { fromZodError } from 'zod-validation-error'
 import type { Database } from './types'
@@ -61,8 +61,10 @@ const envSchema = z.object({
  * 2. VERCEL=1 → Vercel production/preview environment
  * 3. DATABASE_URL contains neon.tech → Neon environment
  * 4. Otherwise → Local Docker environment
+ *
+ * @returns true if running in Neon environment, false for local Docker
  */
-const isNeonEnvironment = (): boolean => {
+export const isNeonEnvironment = (): boolean => {
   // Explicit override: force local database (for development)
   if (process.env.USE_LOCAL_DB === 'true') {
     return false
@@ -86,38 +88,42 @@ const isNeonEnvironment = (): boolean => {
 }
 
 /**
- * Get validated connection string
- *
- * Priority:
- * 1. If USE_LOCAL_DB=true: Use DATABASE_URL_LOCAL (for Docker development)
- * 2. Otherwise: Use DATABASE_URL or POSTGRES_URL (for Neon/production)
+ * Get validated environment variables
+ * @internal
  */
-const getConnectionString = (): string => {
+const getValidatedEnv = () => {
   const parseResult = envSchema.safeParse(process.env)
-
   if (!parseResult.success) {
     const validationError = fromZodError(parseResult.error)
     throw new Error(
       `Invalid database configuration: ${validationError.message}`
     )
   }
+  return parseResult.data
+}
 
-  const env = parseResult.data
+/**
+ * Get validated connection string
+ *
+ * Priority:
+ * 1. If USE_LOCAL_DB=true: Use DATABASE_URL_LOCAL (for Docker development)
+ * 2. Otherwise: Use DATABASE_URL or POSTGRES_URL (for Neon/production)
+ *
+ * @returns PostgreSQL connection string
+ */
+export const getConnectionString = (): string => {
+  const env = getValidatedEnv()
 
-  // If USE_LOCAL_DB is set, prefer local database URL
+  // If USE_LOCAL_DB is set, require DATABASE_URL_LOCAL explicitly
   if (env.USE_LOCAL_DB === 'true') {
     const localUrl = env.DATABASE_URL_LOCAL
-    if (localUrl) {
-      return localUrl
+    if (!localUrl) {
+      throw new Error(
+        'USE_LOCAL_DB is set but DATABASE_URL_LOCAL is not configured. ' +
+        'Please configure it in your .env file for local development.'
+      )
     }
-    // Fallback: if DATABASE_URL doesn't contain neon.tech, use it
-    if (env.DATABASE_URL && !env.DATABASE_URL.includes('neon.tech')) {
-      return env.DATABASE_URL
-    }
-    throw new Error(
-      'USE_LOCAL_DB is set but DATABASE_URL_LOCAL is not configured. ' +
-      'Please set DATABASE_URL_LOCAL to your local Docker PostgreSQL connection string.'
-    )
+    return localUrl
   }
 
   // Production: use DATABASE_URL or POSTGRES_URL
@@ -146,10 +152,8 @@ const createPool = (): PgPool | NeonPool => {
   const connectionString = getConnectionString()
 
   if (isNeonEnvironment()) {
-    // Configure Neon for serverless environment
-    // WebSocket is enabled by default in @neondatabase/serverless
-    neonConfig.fetchConnectionCache = true
-
+    // Neon serverless environment
+    // Connection caching is enabled by default server-side (since Feb 2024)
     return new NeonPool({
       connectionString,
       max: 10,
@@ -201,13 +205,36 @@ export type DB = typeof db
 
 /**
  * Get unpooled connection string for migrations
- * Neon provides DATABASE_URL_UNPOOLED for direct connections
+ *
+ * For Neon: Uses DATABASE_URL_UNPOOLED for direct connections
+ * For Local: Uses DATABASE_URL_LOCAL or getConnectionString()
+ *
+ * This respects USE_LOCAL_DB setting to prevent accidental
+ * migrations against production database.
+ *
+ * @returns Direct (unpooled) PostgreSQL connection string
  */
 export const getUnpooledConnectionString = (): string => {
-  const unpooled = process.env.DATABASE_URL_UNPOOLED
+  const env = getValidatedEnv()
+
+  // If USE_LOCAL_DB is set, require DATABASE_URL_LOCAL explicitly
+  if (env.USE_LOCAL_DB === 'true') {
+    const localUrl = env.DATABASE_URL_LOCAL
+    if (!localUrl) {
+      throw new Error(
+        'USE_LOCAL_DB is set but DATABASE_URL_LOCAL is not configured. ' +
+        'Please configure it in your .env file for local development.'
+      )
+    }
+    return localUrl
+  }
+
+  // Production: prefer unpooled connection for migrations
+  const unpooled = env.DATABASE_URL_UNPOOLED
   if (unpooled) {
     return unpooled
   }
+
   // Fall back to regular connection string
   return getConnectionString()
 }
