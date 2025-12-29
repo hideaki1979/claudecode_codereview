@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@neondatabase/serverless": "^1.0.2",
     "@octokit/rest": "^22.0.1",
     "@vercel/postgres": "^0.10.0",
     "date-fns": "^4.1.0",

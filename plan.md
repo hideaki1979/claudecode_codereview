@@ -419,13 +419,13 @@ export const db = new Kysely<Database>({
 
 - [x] `src/app/api/analysis/route.ts` 作成（POST/GETエンドポイント）
 - [x] 分析結果の自動保存（POST時にDB保存）
-- [ ] キャッシュロジック実装
+- [x] キャッシュロジック実装
 - [x] エラーハンドリング強化（バリデーション、GitHubエラー、DB エラー）
 
 #### ステップ2: ダッシュボード改修（2-3日）
 
 - [x] `DashboardContent.tsx` データ取得先変更（分析APIを使用）
-- [ ] キャッシュ戦略実装（SWR or React Query）※カスタムフック`usePullRequests`で基本機能は実装済み
+- [x] キャッシュ戦略実装（SWR or React Query）※カスタムフック`usePullRequests`で基本機能は実装済み
 - [x] ローディング状態改善
 - [x] エラー表示改善
 
