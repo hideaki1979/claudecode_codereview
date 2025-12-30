@@ -14,6 +14,7 @@ import { PRCard } from '@/components/PRCard';
 import { AnalysisChart } from '@/components/AnalysisChart';
 import { PRFilter } from '@/components/PRFilter';
 import { TrendCharts } from '@/components/charts';
+import { WeeklyReport } from '@/components/reports';
 import type { PRWithAnalysis, FilterOptions } from '@/types/dashboard';
 import type { GitHubPullRequestSimple } from '@/types/github';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
@@ -329,6 +330,9 @@ export function DashboardContent({
 
       {/* Trend Charts */}
       <TrendCharts owner={owner} repo={repo} />
+
+      {/* Weekly Report */}
+      <WeeklyReport owner={owner} repo={repo} />
 
       {/* Grid Layout: Filter + PR List */}
       <div className="grid gap-6 lg:grid-cols-4">
