@@ -485,10 +485,21 @@ export const db = new Kysely<Database>({
 
 #### ステップ 1: 傾向分析機能（1 週間）
 
-- [ ] 日次リスク傾向グラフ
-- [ ] 週次複雑度分析
-- [ ] セキュリティアラート傾向
-- [ ] ダッシュボードにチャート追加
+- [x] 日次リスク傾向グラフ
+- [x] 週次複雑度分析
+- [x] セキュリティアラート傾向
+- [x] ダッシュボードにチャート追加
+
+**実装詳細**:
+- `src/lib/db/trends.ts`: 傾向分析用DB関数（getDailyRiskTrend, getWeeklyComplexityTrend, getSecurityAlertTrend, getOverallTrendSummary）
+- `src/app/api/trends/`: 傾向分析APIエンドポイント（owner/repo指定、type/days/weeks パラメータ対応）
+- `src/components/charts/`: Rechartsを使用したチャートコンポーネント
+  - `RiskTrendChart.tsx`: 日次リスク推移（折れ線グラフ）
+  - `ComplexityTrendChart.tsx`: 週次複雑度推移（棒グラフ）
+  - `SecurityTrendChart.tsx`: セキュリティ検出推移（積み上げ面グラフ）
+  - `TrendSummaryCard.tsx`: サマリーカード（傾向方向表示付き）
+  - `TrendCharts.tsx`: メインコンテナ（SWRでデータ取得）
+- ダッシュボード統合: `DashboardContent.tsx`にTrendCharts追加
 
 #### ステップ 2: レポート生成（1 週間）
 
@@ -2011,6 +2022,7 @@ export function DashboardContent() {
 | 2025-12-29 | 1.1.0      | Phase 2 残タスク詳細実装計画追加（キャッシュロジック・SWR 戦略）       | Claude Code |
 | 2025-12-29 | 1.2.0      | Phase 2 完了確認、成功基準チェック更新                                 | Claude Code |
 | 2025-12-29 | 1.3.0      | Phase 3 完了（Neon 移行、パフォーマンステスト、Vercel Analytics 導入） | Claude Code |
+| 2025-12-30 | 1.4.0      | Phase 4 ステップ1完了（傾向分析機能: DB関数、API、Rechartsチャート、ダッシュボード統合） | Claude Code |
 
 ---
 
