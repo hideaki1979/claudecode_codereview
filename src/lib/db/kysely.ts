@@ -172,10 +172,13 @@ const createPool = (): PgPool | NeonPool => {
 }
 
 /**
- * Kysely database instance
+ * Kysely database instance (lazy initialized)
  *
  * This is the main database client used throughout the application.
  * It provides type-safe query building based on the Database schema.
+ *
+ * Uses lazy initialization to prevent build-time database connection errors.
+ * The database connection is only established when first accessed at runtime.
  *
  * Automatically selects the appropriate pool based on environment:
  * - Production (Vercel/Neon): Serverless-optimized connection pool
@@ -191,10 +194,28 @@ const createPool = (): PgPool | NeonPool => {
  *   .execute()
  * ```
  */
-export const db = new Kysely<Database>({
-  dialect: new PostgresDialect({
-    pool: createPool(),
-  }),
+let _db: Kysely<Database> | null = null
+
+const getDb = (): Kysely<Database> => {
+  if (!_db) {
+    _db = new Kysely<Database>({
+      dialect: new PostgresDialect({
+        pool: createPool(),
+      }),
+    })
+  }
+  return _db
+}
+
+export const db: Kysely<Database> = new Proxy({} as Kysely<Database>, {
+  get(_, prop: string | symbol) {
+    const instance = getDb()
+    const value = (instance as unknown as Record<string | symbol, unknown>)[prop]
+    if (typeof value === 'function') {
+      return (value as (...args: unknown[]) => unknown).bind(instance)
+    }
+    return value
+  },
 })
 
 /**
