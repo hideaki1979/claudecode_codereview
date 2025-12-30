@@ -210,7 +210,11 @@ const getDb = (): Kysely<Database> => {
 export const db: Kysely<Database> = new Proxy({} as Kysely<Database>, {
   get(_, prop: string | symbol) {
     const instance = getDb()
-    return (instance as unknown as Record<string | symbol, unknown>)[prop]
+    const value = (instance as unknown as Record<string | symbol, unknown>)[prop]
+    if (typeof value === 'function') {
+      return (value as (...args: unknown[]) => unknown).bind(instance)
+    }
+    return value
   },
 })
 
