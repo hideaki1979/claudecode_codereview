@@ -52,9 +52,9 @@ const trendsQuerySchema = z.object({
  * Route params type
  */
 interface RouteParams {
-  params: Promise<{
+  params: {
     repositoryId: string
-  }>
+  }
 }
 
 /**
@@ -75,7 +75,7 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     // Await params to get repositoryId (Next.js 16 async params requirement)
-    const { repositoryId } = await params
+    const { repositoryId } = params
 
     // Validate repositoryId format (UUID)
     const uuidRegex =

@@ -78,16 +78,16 @@ export function SecurityTrendChart({
               borderRadius: '8px',
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             }}
-            formatter={(value, name) => [
-              typeof value === 'number' ? value : 0,
-              name === 'criticalCount'
-                ? 'クリティカル'
-                : name === 'highCount'
-                  ? '高'
-                  : name === 'mediumCount'
-                    ? '中'
-                    : '低',
-            ]}
+            formatter={(value, name) => {
+              const nameMap ={
+                'criticalCount': 'クリティカル',
+                'highCount': '高',
+                'mediumCount': '中',
+                'lowCount': '低',
+              };
+              const displayName = nameMap[name as keyof typeof nameMap] || String(name);
+              return [typeof value === 'number' ? value : 0, displayName];
+            }}
             labelFormatter={(label) => `日付: ${label}`}
           />
           <Legend

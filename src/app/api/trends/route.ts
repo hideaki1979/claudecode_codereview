@@ -137,7 +137,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           error: 'Aggregated trends across all repositories not yet supported. Please specify owner and repo parameters.',
           code: 'NOT_IMPLEMENTED',
         },
-        { status: HTTP_STATUS.NOT_FOUND }
+        { status: HTTP_STATUS.NOT_IMPLEMENTED }
       )
     }
 

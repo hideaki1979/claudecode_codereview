@@ -40,8 +40,13 @@ interface TrendApiResponse<T> {
 const fetcher = async <T,>(url: string): Promise<T | null> => {
   const res = await fetch(url)
   if (!res.ok) {
-    const error = await res.json()
-    throw new Error(error.error || 'Failed to fetch')
+    let errorInfo;
+    try {
+      errorInfo = await res.json()
+    } catch  {
+      errorInfo = { error: `Request failed with status ${res.status}` };
+    }
+    throw new Error(errorInfo.error || 'Failed to fetch')
   }
   const json: TrendApiResponse<T> = await res.json()
   return json.data?.trend ?? null
