@@ -17,13 +17,13 @@ import { sendWeeklyReportEmail, isEmailConfigured } from '@/lib/email'
 import { generateReportPDF } from '@/lib/export/pdf'
 
 // Request body validation schema
+// Note: 'from' is intentionally NOT configurable by clients to prevent email spoofing
 const bodySchema = z.object({
   owner: z.string().min(1, 'Owner is required'),
   repo: z.string().min(1, 'Repository name is required'),
   weeksAgo: z.number().int().min(0).max(52).default(0),
   to: z.union([z.string().email(), z.array(z.string().email())]),
   attachPDF: z.boolean().default(false),
-  from: z.string().email().optional(),
   replyTo: z.string().email().optional(),
 })
 
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    const { owner, repo, weeksAgo, to, attachPDF, from, replyTo } = validation.data
+    const { owner, repo, weeksAgo, to, attachPDF, replyTo } = validation.data
 
     // Generate the report
     const report = await generateWeeklyReport(owner, repo, weeksAgo)
@@ -78,9 +78,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       pdfData = await generateReportPDF(report)
     }
 
-    // Send email
+    // Send email (from address is fixed server-side to prevent spoofing)
     const result = await sendWeeklyReportEmail(to, report, {
-      from,
       replyTo,
       attachPDF,
       pdfData,

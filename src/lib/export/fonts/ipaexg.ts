@@ -2,32 +2,40 @@
  * IPAexGothic Font Loader
  *
  * Dynamically loads the IPAexGothic Japanese font for jsPDF.
- * The font is fetched from a CDN and cached in memory.
+ * Prioritizes local file, falls back to CDN if unavailable.
  *
  * IPAexGothic is distributed under the IPA Font License Agreement v1.0
  * https://moji.or.jp/ipafont/license/
  */
 
+import { readFile } from 'fs/promises'
+import { join } from 'path'
+
 let fontCache: string | null = null
 let loadPromise: Promise<string> | null = null
 
 /**
- * Font source URLs (with fallbacks)
+ * Local font path (relative to project root)
  */
-const FONT_URLS = [
-  // Primary: jsDelivr CDN (serving from GitHub)
-  'https://cdn.jsdelivr.net/gh/nicothin/NTH-start-project@master/src/fonts/ipaexg.ttf',
-  // Fallback: Raw GitHub
-  'https://raw.githubusercontent.com/nicothin/NTH-start-project/master/src/fonts/ipaexg.ttf',
+const LOCAL_FONT_PATH = join(process.cwd(), 'public', 'fonts', 'ipaexg.ttf')
+
+/**
+ * Fallback CDN URLs (only used if local file is unavailable)
+ */
+const FALLBACK_URLS = [
+  // Official IPA mirror
+  'https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexg00401.zip',
 ]
 
 /**
- * Convert ArrayBuffer to Base64 string
+ * Convert Buffer/ArrayBuffer to Base64 string
  */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
+function bufferToBase64(buffer: Buffer | ArrayBuffer): string {
+  if (buffer instanceof Buffer) {
+    return buffer.toString('base64')
+  }
   const bytes = new Uint8Array(buffer)
   let binary = ''
-  // Process in chunks to avoid stack overflow for large fonts
   const chunkSize = 8192
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
@@ -37,13 +45,87 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
+ * Validate TTF file format
+ */
+function isValidTTF(buffer: Buffer | ArrayBuffer): boolean {
+  const bytes = buffer instanceof Buffer ? buffer : new Uint8Array(buffer)
+  if (bytes.length < 4) return false
+
+  // TrueType signature
+  const isTrueType =
+    bytes[0] === 0x00 && bytes[1] === 0x01 && bytes[2] === 0x00 && bytes[3] === 0x00
+
+  // OpenType with TrueType outlines
+  const isOpenType =
+    bytes[0] === 0x74 && bytes[1] === 0x72 && bytes[2] === 0x75 && bytes[3] === 0x65
+
+  return isTrueType || isOpenType
+}
+
+/**
+ * Load font from local filesystem
+ */
+async function loadFromLocal(): Promise<string | null> {
+  try {
+    console.log(`Loading Japanese font from local: ${LOCAL_FONT_PATH}`)
+    const buffer = await readFile(LOCAL_FONT_PATH)
+
+    if (!isValidTTF(buffer)) {
+      console.warn('Local font file is not a valid TTF')
+      return null
+    }
+
+    console.log('Japanese font loaded from local file')
+    return bufferToBase64(buffer)
+  } catch (error) {
+    console.warn('Failed to load font from local file:', error instanceof Error ? error.message : error)
+    return null
+  }
+}
+
+/**
+ * Load font from CDN (fallback)
+ */
+async function loadFromCDN(): Promise<string | null> {
+  for (const url of FALLBACK_URLS) {
+    try {
+      console.log(`Loading Japanese font from CDN: ${url}`)
+      const response = await fetch(url, { cache: 'force-cache' })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const arrayBuffer = await response.arrayBuffer()
+
+      // Handle ZIP file from official source
+      if (url.endsWith('.zip')) {
+        console.warn('CDN fallback requires ZIP extraction - not supported in runtime')
+        continue
+      }
+
+      if (!isValidTTF(arrayBuffer)) {
+        throw new Error('Invalid font file format')
+      }
+
+      console.log('Japanese font loaded from CDN')
+      return bufferToBase64(arrayBuffer)
+    } catch (error) {
+      console.warn(`Failed to load font from ${url}:`, error instanceof Error ? error.message : error)
+      continue
+    }
+  }
+  return null
+}
+
+/**
  * Load IPAexGothic font
  * Returns the font as a Base64 encoded string
  *
- * Features:
- * - Fetches from CDN on first call
- * - Caches in memory for subsequent calls
- * - Multiple fallback URLs for reliability
+ * Loading priority:
+ * 1. Memory cache (instant)
+ * 2. Local file (public/fonts/ipaexg.ttf)
+ * 3. CDN fallback (if local unavailable)
  */
 export async function loadIPAexGothicFont(): Promise<string> {
   // Return cached font if available
@@ -58,48 +140,24 @@ export async function loadIPAexGothicFont(): Promise<string> {
 
   // Start loading
   loadPromise = (async () => {
-    const errors: Error[] = []
-
-    for (const url of FONT_URLS) {
-      try {
-        console.log(`Loading Japanese font from: ${url}`)
-        const response = await fetch(url, {
-          // Cache the font for 7 days
-          cache: 'force-cache',
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-
-        const arrayBuffer = await response.arrayBuffer()
-
-        // Validate it looks like a TTF file (starts with specific bytes)
-        const header = new Uint8Array(arrayBuffer.slice(0, 4))
-        const isTTF =
-          // TrueType
-          (header[0] === 0x00 && header[1] === 0x01 && header[2] === 0x00 && header[3] === 0x00) ||
-          // OpenType with TrueType outlines
-          (header[0] === 0x74 && header[1] === 0x72 && header[2] === 0x75 && header[3] === 0x65)
-
-        if (!isTTF) {
-          throw new Error('Invalid font file format')
-        }
-
-        fontCache = arrayBufferToBase64(arrayBuffer)
-        console.log('Japanese font loaded successfully')
-        return fontCache
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error))
-        errors.push(err)
-        console.warn(`Failed to load font from ${url}:`, err.message)
-        continue
-      }
+    // Try local file first
+    const localFont = await loadFromLocal()
+    if (localFont) {
+      fontCache = localFont
+      return fontCache
     }
 
-    // All URLs failed
+    // Fall back to CDN
+    const cdnFont = await loadFromCDN()
+    if (cdnFont) {
+      fontCache = cdnFont
+      return fontCache
+    }
+
+    // All sources failed
+    loadPromise = null
     throw new Error(
-      `Failed to load IPAexGothic font from all sources. Errors: ${errors.map((e) => e.message).join('; ')}`
+      'Failed to load IPAexGothic font. Please ensure public/fonts/ipaexg.ttf exists.'
     )
   })()
 

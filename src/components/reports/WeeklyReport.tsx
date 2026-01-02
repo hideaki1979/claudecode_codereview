@@ -6,7 +6,7 @@
  * Fetches and displays the complete weekly report with all sections.
  */
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import useSWR from 'swr'
 import { FileBarChart2, Loader2, AlertCircle, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { WeeklyReportCard } from './WeeklyReportCard'
@@ -14,6 +14,7 @@ import { ReportExportButtons } from './ReportExportButtons'
 import { ReportEmailForm } from './ReportEmailForm'
 import { TopRiskyPRsTable } from './TopRiskyPRsTable'
 import { SecurityFindingsCard } from './SecurityFindingsCard'
+import { useEmailConfig } from '@/hooks/useEmailConfig'
 import type { WeeklyReport as WeeklyReportType } from '@/lib/db/reports'
 
 interface WeeklyReportProps {
@@ -35,7 +36,6 @@ export function WeeklyReport({
   repo,
 }: WeeklyReportProps): React.JSX.Element {
   const [weeksAgo, setWeeksAgo] = useState(0)
-  const [isEmailConfigured, setIsEmailConfigured] = useState(false)
 
   // Fetch report data
   const {
@@ -48,13 +48,8 @@ export function WeeklyReport({
     { revalidateOnFocus: false }
   )
 
-  // Check email configuration
-  useEffect(() => {
-    fetch('/api/reports/email')
-      .then((res) => res.json())
-      .then((data) => setIsEmailConfigured(data.configured))
-      .catch(() => setIsEmailConfigured(false))
-  }, [])
+  // Check email configuration (using SWR for consistency and caching)
+  const { isConfigured: isEmailConfigured } = useEmailConfig()
 
   // Navigation handlers
   const handlePreviousWeek = () => setWeeksAgo((prev) => Math.min(prev + 1, 52))

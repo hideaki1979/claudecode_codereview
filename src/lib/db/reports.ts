@@ -128,7 +128,7 @@ function getWeekBounds(weeksAgo: number = 0): { weekStart: Date; weekEnd: Date }
  * Generate UUID for report
  */
 function generateReportId(): string {
-  return `report-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+  return crypto.randomUUID();
 }
 
 /**
@@ -449,21 +449,21 @@ export async function generateWeeklyReport(
     complexityChange:
       prevPRSummary.avgComplexityScore > 0
         ? Math.round(
-            ((prSummary.avgComplexityScore - prevPRSummary.avgComplexityScore) / prevPRSummary.avgComplexityScore) * 100
-          )
+          ((prSummary.avgComplexityScore - prevPRSummary.avgComplexityScore) / prevPRSummary.avgComplexityScore) * 100
+        )
         : 0,
     securityFindingsChange:
       prevSecuritySummary.totalFindings > 0
         ? Math.round(
-            ((securitySummary.totalFindings - prevSecuritySummary.totalFindings) / prevSecuritySummary.totalFindings) *
-              100
-          )
+          ((securitySummary.totalFindings - prevSecuritySummary.totalFindings) / prevSecuritySummary.totalFindings) *
+          100
+        )
         : 0,
     prCountChange:
       prevPRSummary.totalPRsAnalyzed > 0
         ? Math.round(
-            ((prSummary.totalPRsAnalyzed - prevPRSummary.totalPRsAnalyzed) / prevPRSummary.totalPRsAnalyzed) * 100
-          )
+          ((prSummary.totalPRsAnalyzed - prevPRSummary.totalPRsAnalyzed) / prevPRSummary.totalPRsAnalyzed) * 100
+        )
         : 0,
   }
 

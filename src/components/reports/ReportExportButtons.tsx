@@ -6,7 +6,7 @@
  * Provides PDF and CSV export functionality for weekly reports.
  */
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Download, FileText, Table, Loader2, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -16,92 +16,107 @@ interface ReportExportButtonsProps {
   weeksAgo: number
 }
 
+type ExportType = 'pdf' | 'csv'
 type CSVExportType = 'summary' | 'risky-prs' | 'daily-breakdown' | 'finding-types' | 'full'
+
+/**
+ * Extract error message from API response
+ */
+async function extractErrorMessage(response: Response, defaultMessage: string): Promise<string> {
+  const contentType = response.headers.get('content-type')
+  if (contentType?.includes('application/json')) {
+    try {
+      const errorData = await response.json()
+      return errorData.message || errorData.error || defaultMessage
+    } catch {
+      // Ignore JSON parse errors
+    }
+  }
+  return defaultMessage
+}
+
+/**
+ * Trigger file download from blob
+ */
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+}
 
 export function ReportExportButtons({
   owner,
   repo,
   weeksAgo,
 }: ReportExportButtonsProps): React.JSX.Element {
-  const [isExporting, setIsExporting] = useState<'pdf' | 'csv' | null>(null)
+  const [isExporting, setIsExporting] = useState<ExportType | null>(null)
   const [showCSVOptions, setShowCSVOptions] = useState(false)
 
   const baseUrl = `/api/reports/export?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&weeksAgo=${weeksAgo}`
 
-  const handlePDFExport = async () => {
-    setIsExporting('pdf')
-    try {
-      const response = await fetch(`${baseUrl}&format=pdf`)
-      if (!response.ok) {
-        // Try to get error details from response
-        const contentType = response.headers.get('content-type')
-        let errorMessage = `PDF export failed (${response.status})`
-        if (contentType?.includes('application/json')) {
-          try {
-            const errorData = await response.json()
-            errorMessage = errorData.message || errorData.error || errorMessage
-          } catch {
-            // Ignore JSON parse errors
-          }
-        }
-        throw new Error(errorMessage)
-      }
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${owner}-${repo}-report.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      toast.success('PDFをダウンロードしました')
-    } catch (error) {
-      console.error('PDF export error:', error)
-      const message = error instanceof Error ? error.message : 'PDFエクスポートに失敗しました'
-      toast.error(`PDF出力失敗: ${message}`)
-    } finally {
-      setIsExporting(null)
-    }
-  }
+  /**
+   * Common file download handler
+   */
+  const downloadFile = useCallback(
+    async (
+      url: string,
+      filename: string,
+      exportType: ExportType,
+      formatLabel: string
+    ): Promise<void> => {
+      setIsExporting(exportType)
+      try {
+        const response = await fetch(url)
 
-  const handleCSVExport = async (csvType: CSVExportType) => {
-    setIsExporting('csv')
-    setShowCSVOptions(false)
-    try {
-      const response = await fetch(`${baseUrl}&format=csv&csvType=${csvType}`)
-      if (!response.ok) {
-        // Try to get error details from response
-        const contentType = response.headers.get('content-type')
-        let errorMessage = `CSV export failed (${response.status})`
-        if (contentType?.includes('application/json')) {
-          try {
-            const errorData = await response.json()
-            errorMessage = errorData.message || errorData.error || errorMessage
-          } catch {
-            // Ignore JSON parse errors
-          }
+        if (!response.ok) {
+          const errorMessage = await extractErrorMessage(
+            response,
+            `${formatLabel}エクスポートに失敗しました (${response.status})`
+          )
+          throw new Error(errorMessage)
         }
-        throw new Error(errorMessage)
+
+        const blob = await response.blob()
+        triggerDownload(blob, filename)
+        toast.success(`${formatLabel}をダウンロードしました`)
+      } catch (error) {
+        console.error(`${formatLabel} export error:`, error)
+        const message =
+          error instanceof Error ? error.message : `${formatLabel}エクスポートに失敗しました`
+        toast.error(`${formatLabel}出力失敗: ${message}`)
+      } finally {
+        setIsExporting(null)
       }
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${owner}-${repo}-${csvType}.csv`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      toast.success('CSVをダウンロードしました')
-    } catch (error) {
-      console.error('CSV export error:', error)
-      const message = error instanceof Error ? error.message : 'CSVエクスポートに失敗しました'
-      toast.error(`CSV出力失敗: ${message}`)
-    } finally {
-      setIsExporting(null)
-    }
-  }
+    },
+    []
+  )
+
+  const handlePDFExport = useCallback(() => {
+    return downloadFile(
+      `${baseUrl}&format=pdf`,
+      `${owner}-${repo}-report.pdf`,
+      'pdf',
+      'PDF'
+    )
+  }, [baseUrl, owner, repo, downloadFile])
+
+  const handleCSVExport = useCallback(
+    (csvType: CSVExportType) => {
+      setShowCSVOptions(false)
+      return downloadFile(
+        `${baseUrl}&format=csv&csvType=${csvType}`,
+        `${owner}-${repo}-${csvType}.csv`,
+        'csv',
+        'CSV'
+      )
+    },
+    [baseUrl, owner, repo, downloadFile]
+  )
 
   const csvOptions: { type: CSVExportType; label: string }[] = [
     { type: 'summary', label: 'サマリー' },
