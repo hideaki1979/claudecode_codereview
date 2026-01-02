@@ -1,5 +1,3 @@
-'use client'
-
 /**
  * Weekly Report Card Component
  *

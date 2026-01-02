@@ -1,5 +1,3 @@
-'use client'
-
 /**
  * Security Findings Card Component
  *

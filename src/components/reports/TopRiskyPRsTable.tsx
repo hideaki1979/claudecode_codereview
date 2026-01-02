@@ -1,5 +1,3 @@
-'use client'
-
 /**
  * Top Risky PRs Table Component
  *

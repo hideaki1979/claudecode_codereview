@@ -3,10 +3,15 @@
  *
  * Generates PDF reports using jsPDF.
  * Provides formatted weekly report documents with charts and tables.
+ * Supports Japanese text via IPAexGothic font (dynamically loaded).
  */
 
 import { jsPDF } from 'jspdf'
 import type { WeeklyReport } from '../db/reports'
+
+// Font name constants
+const FONT_JAPANESE = 'IPAexGothic'
+const FONT_DEFAULT = 'helvetica'
 
 /**
  * Generate a PDF report from weekly report data
@@ -14,8 +19,39 @@ import type { WeeklyReport } from '../db/reports'
  * @param report - Weekly report data
  * @returns Base64 encoded PDF data
  */
-export function generateReportPDF(report: WeeklyReport): string {
+export async function generateReportPDF(report: WeeklyReport): Promise<string> {
   const doc = new jsPDF('p', 'mm', 'a4')
+
+  // Dynamically load and register Japanese font
+  let hasJapaneseFont = false
+  try {
+    const { loadIPAexGothicFont } = await import('./fonts/ipaexg')
+    const fontBase64 = await loadIPAexGothicFont()
+    doc.addFileToVFS('ipaexg.ttf', fontBase64)
+    doc.addFont('ipaexg.ttf', FONT_JAPANESE, 'normal')
+    hasJapaneseFont = true
+  } catch (error) {
+    console.warn('Failed to load Japanese font, using default:', error)
+  }
+
+  // Helper to set font (use Japanese if available, fallback to default)
+  const setFont = (style: 'normal' | 'bold' | 'italic' = 'normal') => {
+    if (hasJapaneseFont) {
+      doc.setFont(FONT_JAPANESE, style)
+    } else {
+      doc.setFont(FONT_DEFAULT, style)
+    }
+  }
+
+  // Helper to set bold font
+  const setBoldFont = () => {
+    if (hasJapaneseFont) {
+      // IPAexGothic doesn't have bold, use normal
+      doc.setFont(FONT_JAPANESE, 'normal')
+    } else {
+      doc.setFont(FONT_DEFAULT, 'bold')
+    }
+  }
   const pageWidth = doc.internal.pageSize.getWidth()
   const margin = 20
   let yPos = margin
@@ -30,13 +66,13 @@ export function generateReportPDF(report: WeeklyReport): string {
 
   // Title
   doc.setFontSize(24)
-  doc.setFont('helvetica', 'bold')
+  setBoldFont()
   doc.text('Weekly Code Review Report', pageWidth / 2, yPos, { align: 'center' })
   yPos += 15
 
   // Repository info
   doc.setFontSize(14)
-  doc.setFont('helvetica', 'normal')
+  setFont('normal')
   doc.text(
     `${report.summary.repositoryOwner}/${report.summary.repositoryName}`,
     pageWidth / 2,
@@ -65,12 +101,12 @@ export function generateReportPDF(report: WeeklyReport): string {
 
   // Summary Section
   doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
+  setBoldFont()
   doc.text('Summary', margin, yPos)
   yPos += 10
 
   doc.setFontSize(11)
-  doc.setFont('helvetica', 'normal')
+  setFont('normal')
 
   // Summary stats in two columns
   const col1X = margin
@@ -91,12 +127,12 @@ export function generateReportPDF(report: WeeklyReport): string {
   // Week-over-week comparison
   checkPageBreak(40)
   doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
+  setBoldFont()
   doc.text('Week-over-Week Changes', margin, yPos)
   yPos += 8
 
   doc.setFontSize(11)
-  doc.setFont('helvetica', 'normal')
+  setFont('normal')
 
   const formatChange = (value: number): string => {
     const sign = value >= 0 ? '+' : ''
@@ -118,12 +154,12 @@ export function generateReportPDF(report: WeeklyReport): string {
   // Risk Distribution
   checkPageBreak(50)
   doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
+  setBoldFont()
   doc.text('Risk Distribution', margin, yPos)
   yPos += 8
 
   doc.setFontSize(11)
-  doc.setFont('helvetica', 'normal')
+  setFont('normal')
 
   const riskDist = report.prSummary.riskDistribution
   doc.text(`Low: ${riskDist.low}`, margin, yPos)
@@ -135,12 +171,12 @@ export function generateReportPDF(report: WeeklyReport): string {
   // Security Findings Section
   checkPageBreak(60)
   doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
+  setBoldFont()
   doc.text('Security Findings', margin, yPos)
   yPos += 10
 
   doc.setFontSize(11)
-  doc.setFont('helvetica', 'normal')
+  setFont('normal')
 
   doc.text(`Total Findings: ${report.securitySummary.totalFindings}`, col1X, yPos)
   yPos += 7
@@ -153,10 +189,10 @@ export function generateReportPDF(report: WeeklyReport): string {
 
   // Top finding types
   if (report.securitySummary.topFindingTypes.length > 0) {
-    doc.setFont('helvetica', 'bold')
+    setBoldFont()
     doc.text('Top Finding Types:', margin, yPos)
     yPos += 7
-    doc.setFont('helvetica', 'normal')
+    setFont('normal')
 
     report.securitySummary.topFindingTypes.forEach((finding) => {
       doc.text(`  - ${finding.type}: ${finding.count}`, margin, yPos)
@@ -168,19 +204,19 @@ export function generateReportPDF(report: WeeklyReport): string {
   // Top Risky PRs Section
   checkPageBreak(80)
   doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
+  setBoldFont()
   doc.text('Top Risky Pull Requests', margin, yPos)
   yPos += 10
 
   if (report.topRiskyPRs.length === 0) {
     doc.setFontSize(11)
-    doc.setFont('helvetica', 'italic')
+    setFont('italic')
     doc.text('No high-risk PRs this week.', margin, yPos)
     yPos += 10
   } else {
     // Table header
     doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
+    setBoldFont()
 
     const colWidths = [20, 70, 25, 25, 30]
     const headers = ['PR #', 'Title', 'Risk', 'Level', 'Findings']
@@ -197,7 +233,7 @@ export function generateReportPDF(report: WeeklyReport): string {
     yPos += 5
 
     // Table rows
-    doc.setFont('helvetica', 'normal')
+    setFont('normal')
     report.topRiskyPRs.forEach((pr) => {
       checkPageBreak(10)
       xPos = margin
@@ -227,18 +263,18 @@ export function generateReportPDF(report: WeeklyReport): string {
   // Daily Breakdown Section
   checkPageBreak(80)
   doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
+  setBoldFont()
   doc.text('Daily Breakdown', margin, yPos)
   yPos += 10
 
   if (report.dailyBreakdown.length === 0) {
     doc.setFontSize(11)
-    doc.setFont('helvetica', 'italic')
+    setFont('italic')
     doc.text('No data available for this week.', margin, yPos)
   } else {
     // Table header
     doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
+    setBoldFont()
 
     const dailyColWidths = [35, 40, 40, 45]
     const dailyHeaders = ['Date', 'PRs Analyzed', 'Avg Risk', 'Findings']
@@ -255,7 +291,7 @@ export function generateReportPDF(report: WeeklyReport): string {
     yPos += 5
 
     // Table rows
-    doc.setFont('helvetica', 'normal')
+    setFont('normal')
     report.dailyBreakdown.forEach((day) => {
       checkPageBreak(10)
       xPos = margin

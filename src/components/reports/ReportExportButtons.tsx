@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import { Download, FileText, Table, Loader2, ChevronDown } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 interface ReportExportButtonsProps {
   owner: string
@@ -54,10 +55,11 @@ export function ReportExportButtons({
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
+      toast.success('PDFをダウンロードしました')
     } catch (error) {
       console.error('PDF export error:', error)
       const message = error instanceof Error ? error.message : 'PDFエクスポートに失敗しました'
-      alert(message)
+      toast.error(`PDF出力失敗: ${message}`)
     } finally {
       setIsExporting(null)
     }
@@ -91,10 +93,11 @@ export function ReportExportButtons({
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
+      toast.success('CSVをダウンロードしました')
     } catch (error) {
       console.error('CSV export error:', error)
       const message = error instanceof Error ? error.message : 'CSVエクスポートに失敗しました'
-      alert(message)
+      toast.error(`CSV出力失敗: ${message}`)
     } finally {
       setIsExporting(null)
     }

@@ -72,10 +72,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    // Generate PDF if requested
+    // Generate PDF if requested (async - loads Japanese font dynamically)
     let pdfData: string | undefined
     if (attachPDF) {
-      pdfData = generateReportPDF(report)
+      pdfData = await generateReportPDF(report)
     }
 
     // Send email

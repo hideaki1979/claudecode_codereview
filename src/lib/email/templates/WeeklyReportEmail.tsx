@@ -22,7 +22,7 @@ interface WeeklyReportEmailProps {
   dashboardUrl?: string
 }
 
-export function WeeklyReportEmail({ report, dashboardUrl = 'https://code-review-dashboard.vercel.app' }: WeeklyReportEmailProps) {
+export function WeeklyReportEmail({ report, dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://code-review-dashboard.vercel.app/dashboard' }: WeeklyReportEmailProps) {
   const getRiskLevelColor = (level: string): string => {
     switch (level) {
       case 'critical':
@@ -105,8 +105,8 @@ export function WeeklyReportEmail({ report, dashboardUrl = 'https://code-review-
                         report.comparisonWithPreviousWeek.riskScoreChange > 0
                           ? '#dc2626'
                           : report.comparisonWithPreviousWeek.riskScoreChange < 0
-                          ? '#16a34a'
-                          : '#6b7280',
+                            ? '#16a34a'
+                            : '#6b7280',
                     }}
                   >
                     {report.comparisonWithPreviousWeek.riskScoreChange >= 0 ? '+' : ''}
@@ -120,8 +120,8 @@ export function WeeklyReportEmail({ report, dashboardUrl = 'https://code-review-
                         report.comparisonWithPreviousWeek.securityFindingsChange > 0
                           ? '#dc2626'
                           : report.comparisonWithPreviousWeek.securityFindingsChange < 0
-                          ? '#16a34a'
-                          : '#6b7280',
+                            ? '#16a34a'
+                            : '#6b7280',
                     }}
                   >
                     {report.comparisonWithPreviousWeek.securityFindingsChange >= 0 ? '+' : ''}

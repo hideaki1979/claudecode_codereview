@@ -82,8 +82,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const filename = `${owner}-${repo}-report-${report.summary.weekStart}`
 
     if (format === 'pdf') {
-      // Generate PDF
-      const pdfBase64 = generateReportPDF(report)
+      // Generate PDF (async - loads Japanese font dynamically)
+      const pdfBase64 = await generateReportPDF(report)
       const pdfBuffer = Buffer.from(pdfBase64, 'base64')
 
       return new NextResponse(pdfBuffer, {
