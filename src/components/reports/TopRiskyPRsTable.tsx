@@ -73,8 +73,8 @@ export function TopRiskyPRsTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
-            {prs.map((pr, index) => (
-              <tr key={`${pr.prNumber}-${pr.analyzedAt}-${index}`} className="hover:bg-gray-50">
+            {prs.map((pr) => (
+              <tr key={pr.analysisId} className="hover:bg-gray-50">
                 <td className="whitespace-nowrap px-6 py-4">
                   <a
                     href={`https://github.com/${owner}/${repo}/pull/${pr.prNumber}`}

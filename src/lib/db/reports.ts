@@ -68,6 +68,7 @@ export interface WeeklySecuritySummary {
  * Top risky PRs for the week
  */
 export interface TopRiskyPR {
+  analysisId: string
   prNumber: number
   prTitle: string
   riskScore: number
@@ -129,6 +130,24 @@ function getWeekBounds(weeksAgo: number = 0): { weekStart: Date; weekEnd: Date }
  */
 function generateReportId(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Calculate percentage change between two values
+ *
+ * Handles edge cases:
+ * - previous > 0: Standard percentage change calculation
+ * - previous = 0, current > 0: Returns 100 (indicates new occurrence)
+ * - previous = 0, current = 0: Returns 0 (no change)
+ */
+function calculatePercentageChange(current: number, previous: number): number {
+  if (previous > 0) {
+    return Math.round(((current - previous) / previous) * 100)
+  }
+  if (current > 0) {
+    return 100 // New occurrence (from 0 to positive)
+  }
+  return 0
 }
 
 /**
@@ -327,6 +346,7 @@ async function getTopRiskyPRs(
     .leftJoin('security_findings', 'security_findings.analysis_id', 'analyses.id')
     .where('analyses.id', 'in', latestAnalysisIds)
     .select((eb) => [
+      'analyses.id as analysis_id',
       'pull_requests.number',
       'pull_requests.title',
       'analyses.risk_score',
@@ -336,6 +356,7 @@ async function getTopRiskyPRs(
       eb.fn.count<number>('security_findings.id').as('finding_count'),
     ])
     .groupBy([
+      'analyses.id',
       'pull_requests.number',
       'pull_requests.title',
       'analyses.risk_score',
@@ -348,6 +369,7 @@ async function getTopRiskyPRs(
     .execute()
 
   return results.map((r) => ({
+    analysisId: r.analysis_id,
     prNumber: r.number,
     prTitle: r.title,
     riskScore: r.risk_score,
@@ -440,31 +462,24 @@ export async function generateWeeklyReport(
       getWeeklySecuritySummary(repository.id, prevWeekStart, prevWeekEnd, executor),
     ])
 
-  // Calculate week-over-week changes
+  // Calculate week-over-week changes using helper function
   const comparisonWithPreviousWeek = {
-    riskScoreChange:
-      prevPRSummary.avgRiskScore > 0
-        ? Math.round(((prSummary.avgRiskScore - prevPRSummary.avgRiskScore) / prevPRSummary.avgRiskScore) * 100)
-        : 0,
-    complexityChange:
-      prevPRSummary.avgComplexityScore > 0
-        ? Math.round(
-          ((prSummary.avgComplexityScore - prevPRSummary.avgComplexityScore) / prevPRSummary.avgComplexityScore) * 100
-        )
-        : 0,
-    securityFindingsChange:
-      prevSecuritySummary.totalFindings > 0
-        ? Math.round(
-          ((securitySummary.totalFindings - prevSecuritySummary.totalFindings) / prevSecuritySummary.totalFindings) *
-          100
-        )
-        : 0,
-    prCountChange:
-      prevPRSummary.totalPRsAnalyzed > 0
-        ? Math.round(
-          ((prSummary.totalPRsAnalyzed - prevPRSummary.totalPRsAnalyzed) / prevPRSummary.totalPRsAnalyzed) * 100
-        )
-        : 0,
+    riskScoreChange: calculatePercentageChange(
+      prSummary.avgRiskScore,
+      prevPRSummary.avgRiskScore
+    ),
+    complexityChange: calculatePercentageChange(
+      prSummary.avgComplexityScore,
+      prevPRSummary.avgComplexityScore
+    ),
+    securityFindingsChange: calculatePercentageChange(
+      securitySummary.totalFindings,
+      prevSecuritySummary.totalFindings
+    ),
+    prCountChange: calculatePercentageChange(
+      prSummary.totalPRsAnalyzed,
+      prevPRSummary.totalPRsAnalyzed
+    ),
   }
 
   return {
